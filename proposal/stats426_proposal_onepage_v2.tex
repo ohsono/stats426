@@ -1,0 +1,58 @@
+\documentclass[10pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{hyperref}
+
+% Reduce spacing around sections
+\makeatletter
+\renewcommand\section{\@startsection{section}{1}{\z@}%
+  {-1.5ex \@plus -0.5ex \@minus -.2ex}%
+  {0.8ex \@plus.1ex}%
+  {\normalfont\Large\bfseries}}
+\makeatother
+
+\title{Quantifying CNN Robustness to Weather Corruptions in Traffic Sign Recognition}
+\author{Ayah Halabi, Setara Nusratty, Mark Rahal, Hochan Son}
+\date{Stats 426 | Timeline: 4 weeks}
+\begin{document}
+\maketitle
+\section{Objective}
+Deep CNNs achieve 99\% accuracy on clean traffic sign datasets but degrade significantly under real-world conditions. We quantify this robustness gap by measuring ResNet-50's performance on synthetic weather corruptions (rain, fog, low brightness) to identify which conditions and sign types are most vulnerable.
+\section{Methodology}
+We use GTSRB (German Traffic Signs) and LISA (US Traffic Signs) datasets, focusing on 5 classes (Stop, Yield, Speed 30/50/70 km/h) with $224 \times 224$ RGB images. The data is split into 80\% training and 20\% validation from the training set, with a separate test set reserved for corruption experiments.
+
+We fine-tune ResNet-50 (pretrained on ImageNet) on the clean 5-class subset using Adam optimizer (lr=$10^{-4}$), 15 epochs, and early stopping, targeting $>$90\% clean validation accuracy.
+
+Using the Albumentations library, we apply three corruptions to the test set only: (1) rain with synthetic droplets and reduced contrast, (2) fog with atmospheric scattering (fog\_coef=0.5), and (3) low brightness with 30\% reduction.
+
+We evaluate performance using degradation score ($\text{Accuracy}_{\text{corrupted}} / \text{Accuracy}_{\text{clean}}$), $5 \times 5$ confusion matrices per corruption type, and a vulnerability index ranking per-class susceptibility.
+\section{Expected Results}
+\begin{table}[h]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Metric} & \textbf{Expected Range} & \textbf{Hypothesis} \\
+\midrule
+Clean accuracy & 92--98\% & Baseline performance \\
+Rain degradation & $<0.85$ & Moderate impact \\
+\textbf{Fog degradation} & $\mathbf{<0.75}$ & \textbf{Most damaging} (loss of high-frequency details) \\
+Brightness degradation & $<0.90$ & Least impact \\
+\bottomrule
+\end{tabular}
+\end{table}
+\textbf{Key Prediction:} Speed limit signs (text-dependent) will be more vulnerable than Stop/Yield (shape-dependent).
+\section{Success Criteria}
+\textbf{Minimum:} ResNet-50 trained ($>$85\%), degradation scores for 3 corruptions, confusion matrices, 6-page report
+\textbf{Ideal:} $>$92\% clean accuracy, clear vulnerability patterns identified, publication-quality analysis
+\section{References}
+\begin{enumerate}[nosep]
+    \item Stallkamp et al. (2012). Man vs. computer: Benchmarking ML for traffic sign recognition. \textit{Neural Networks}, 32, 323--332.
+    \item Hendrycks \& Dietterich (2019). Benchmarking neural network robustness to common corruptions. \textit{ICLR}.
+    \item Qiao, X. (2023). Traffic sign recognition based on CNN. \textit{Procedia Computer Science}, 220, 107--114.
+\end{enumerate}
+
+\end{document}

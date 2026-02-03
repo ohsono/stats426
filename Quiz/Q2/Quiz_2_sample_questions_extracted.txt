@@ -1,0 +1,107 @@
+STAT 426: Quiz 2 Answer Key
+Based on Lectures 3 & 4
+Q# Correct Answer Explanation & Slide Reference
+1 (b)It discards geometric relation-
+ships...
+Lec 3, Slide 4. Flattening destroys the 2D grid
+structure, meaning vertical neighbors (i, j) and
+(i+ 1, j) become far apart in the vector.
+2 (a)Randomly permuting pixels...
+MLP yields identical performance...
+Lec 3, Slide 5. The ”Permutation Failure” ex-
+periment shows MLPs treat pixels as indepen-
+dent features, ignoring spatial topology, unlike
+CNNs or human vision.
+3 (c)Drastically reduces the number
+of parameters...
+Lec 3, Slide 10 & 22. Weight sharing allows
+the network to use a single kernel scanned across
+the image rather than separate weights for every
+pixel.
+4 (d)Equivariance means if the input
+shifts, the feature map shifts...
+Lec 3, Slide 23. Convolution is translation
+equivariant (features move with input), while
+Pooling provides translation invariance (output
+remains stable).
+5 (c)Convolution requires the kernel
+to be flipped...
+Lec 3, Slide 16. Deep learning libraries techni-
+cally implement cross-correlation (no flip), but
+it is conventionally called convolution.
+6 (b)28×28 Lec 3, Slide 42. Formula:O= (W−K+
+2P)/S+ 1⇒(32−5 + 0)/1 + 1 = 28.
+7 (a)To ensure the output feature
+map has the same spatial dimen-
+sions...
+Lec 3, Slide 34-39. ”Same” padding adds bor-
+der pixels so that Input Height/Width equals
+Output Height/Width.
+8 (b)It acts as a threshold... Lec 3, Slide 28. The bias term shifts the ac-
+tivation function, allowing the filter to fire (or
+not) relative to a learned threshold.
+9 (d)14×20 Lec 3, Slide 31 & 42. Height: (28−3+2)/2+
+1 = 14. Width: (40−3 + 2)/2 + 1 = 20.
+10 (c)It performs downsampling... Lec 3, Slide 40. StridesS >1 skip pixels,
+effectively reducing the spatial resolution of the
+feature map.
+11 (c)To summarize a region by keep-
+ing only the strongest signal...
+Lec 3, Slide 49. Max pooling selects the max-
+imum value in the window, capturing the most
+prominent feature presence.
+1
+Q# Correct Answer Explanation & Slide Reference
+12 (c)It removes positional informa-
+tion...
+Lec 3, Slide 54. GAP averages the entire fea-
+ture map, reducing parameters and enforcing in-
+variance to the feature’s specific location.
+13 (c)It expands... Lec 3, Slide 58. As you go deeper, units ”see”
+a larger patch of the original input due to the
+cumulative effect of convolutions.
+14 (a)Simple Cells and Complex
+Cells...
+Lec 3, Slide 59. Hubel & Wiesel’s discovery
+of orientation-selective cells in the visual cortex
+inspired the hierarchy of simple (conv) and com-
+plex (pool) layers.
+15 (b)To perform dimensionality re-
+duction...
+Lec 3, Slides 67 & 68. 1×1 convolutions
+change the channel depth (e.g., 192→16) with-
+out altering spatial dimensions.
+16 (b)The collection of multiple ker-
+nels...
+Lec 3, Slides 64 & 65. A layer learns a ”bank”
+ofKfilters, resulting in an output volume with
+depthK.
+17 (a)...CNNs learn the optimal filters
+directly from data...
+Lec 3, Slide 27. LeNet demonstrated that fea-
+tures can be learned from raw pixels, replacing
+manual engineering (e.g., Sobel).
+18 (c)The spatial dimensions de-
+crease... depth increases.
+Lec 4, Slide 15-18. Standard architectures
+(like VGG) progressively downsample space (via
+pooling) while increasing channels.
+19 (c)The use of Residual Skip Con-
+nections.
+Lec 3, Slide 10. AlexNet introduced ReLU,
+Dropout, and GPU training. Residual connec-
+tions were introduced later by ResNet (Slide 37).
+20 (b)To fix ”Internal Covariate
+Shift”...
+Lec 4, Slides 47 & 48. Batch Norm stabi-
+lizes distributions of layer inputs, enabling faster
+training and higher learning rates.
+21 (b)A Fully Connected (Dense)
+layer...
+Lec 4, Slides 41 & 42. A 1×1 convolution
+is mathematically identical to applying a dense
+layer to the channel vector at each pixel.
+22 (b)To act as a ”bottleneck” layer... Lec 4, Slide 41 & 42. Inception modules use
+1×1 filters to compress channels before expen-
+sive 3×3 or 5×5 convolutions.
+2

@@ -1,6 +1,20 @@
-.DS_Store
-.Rhistory
+# Claude
 .claude/
-
-
 CLAUDE.md
+
+# Mac OS files
+._*
+
+# LaTex files
+*.gz
+*.out
+*.aux
+*.log
+
+# RStudio files
+.RData
+.Rhistory
+.Rproj.user
+
+# dataset
+dataset/
