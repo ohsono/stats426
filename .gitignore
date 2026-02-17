@@ -5,6 +5,11 @@ CLAUDE.md
 # Mac OS files
 ._*
 
+# vscode files
+.vscode/
+.env
+.DS_Store
+
 # LaTex files
 *.gz
 *.out
