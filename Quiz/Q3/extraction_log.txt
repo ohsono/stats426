@@ -1,0 +1,2 @@
+Extracted text from Quiz/Q3/Quiz3_sample_Questions.pdf to Quiz/Q3/Quiz3_sample_Questions_extracted.txt
+Extracted text from Quiz/Q3/Quiz3_answer-key.pdf to Quiz/Q3/Quiz3_answer-key_extracted.txt

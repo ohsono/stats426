@@ -1,0 +1,3 @@
+Extracted text from ./Lecture/Lecture-5.pdf to ./Lecture/
+Extracted text from ./Lecture/Lecture-5.pdf to ./Lecture/Lecture-5_extracted.txt
+Extracted text from Lecture-6.pdf to Lecture-6_extracted.txt

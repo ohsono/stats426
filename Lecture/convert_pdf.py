@@ -1,4 +1,5 @@
 import pypdf
+import argparse
 import os
 
 def extract_text(pdf_path, output_path):
@@ -16,6 +17,13 @@ def extract_text(pdf_path, output_path):
         print(f"Error extracting text: {e}")
 
 if __name__ == "__main__":
-    pdf_path = "Lecture-4.pdf"
-    output_path = "Lecture-4_extracted.txt"
+    argsparser = argparse.ArgumentParser(description="Extract text from a PDF file.")
+    argsparser.add_argument("--pdf_path", help="Path to the PDF file to extract text from.")
+    argsparser.add_argument("--output_path", help="Path to save the extracted text file.", default="extracted_text.txt")    
+    args = argsparser.parse_args()
+    pdf_path = args.pdf_path    
+    output_path = args.output_path
     extract_text(pdf_path, output_path)
+    log_file = os.path.join(os.path.dirname(output_path), "extraction_log.txt")
+    with open(log_file, "a", encoding="utf-8") as log:
+        log.write(f"Extracted text from {pdf_path} to {output_path}\n") 

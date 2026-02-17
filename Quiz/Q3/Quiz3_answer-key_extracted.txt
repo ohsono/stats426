@@ -1,0 +1,54 @@
+STAT 426: Quiz 3 Answer Key
+Based on Lectures 5 & 6
+Q# Correct An-
+swer
+Explanation & Slide Reference
+1 (C) MLPs operate on a fixed window of lagged inputs and
+cannot access information beyond lagp. This is dis-
+cussed under “MLP for Time Series: Pros and Cons.”
+Lec 5, Slide 15-16.
+2 (B) In an LSSM, the observation (measurement) equation
+isy t =Ch t +η t.Lec 5, Slide 22.
+3 (C) ReLU is unbounded and can cause exploding activa-
+tions when repeatedly multiplied across time steps.
+Tanh is bounded in [−1,1].Lec 5, Slide 30–31.
+4 (C) In Many-to-One architectures, the final hidden state
+hT summarizes the entire sequence and is used for pre-
+diction.Lec 5, Slide 43.
+5 (B) The recursive hidden gradient equation shows gradi-
+ents depend on repeated multiplication ofW ⊤
+hh, lead-
+ing to instability.Lec 6, Slide 8.
+6 (C) Vanishing or exploding gradients depend on the eigen-
+values of the recurrent weight matrix. If|λ|>1→
+exploding; if|λ|<1→vanishing.Lec 6, Slide 8.
+7 (B) Truncated BPTT limits gradient flow to a fixed win-
+dowτfor stability and computational efficiency.Lec
+6, Slide 10.
+8 (C) In a Deep RNN, hidden layerldepends on the layer
+below at timetand the same layer at timet−1.Lec
+6, Slide 14.
+9 (C) The fixed-size context vectorcmust encode arbitrar-
+ily long sequences, creating an information bottleneck.
+Lec 6, Slide 28.
+10 (C) During Teacher Forcing, the ground truth previous to-
+ken is fed into the decoder at the next step.Lec 6,
+Slide 26.
+11 (B) Dividing by
+√
+dprevents large variance in dot-product
+scores and stabilizes Softmax gradients.Lec 6, Slide
+34.
+12 (C) IfQ∈R n×d andK∈R m×d, thenQK ⊤ ∈R n×m.Lec
+6, Slide 35.
+1
+Q# Correct An-
+swer
+Explanation & Slide Reference
+13 (C) In a univariate autoregressive RNN, the inputx t is
+typically the previous observationy t−1.Lec 5, Slide
+31–32.
+14 (C) In synchronized Many-to-Many RNNs, outputs are
+produced at every time step aligned with inputs.Lec
+5, Slide 45.
+2

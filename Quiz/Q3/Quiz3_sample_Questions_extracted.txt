@@ -1,0 +1,92 @@
+STAT 426: Sample Quiz 3
+George Michailidis
+1. What is the key limitation of standard MLPs for time series modeling?
+A)They can not model nonlinear functions.
+B)They require strict stationarity.
+C)They can only see a fixed window of lagged inputs.
+D)They assume Gaussian errors.
+2. In a Linear State Space Model (LSSM), which equation describes how
+observations are generated?
+A)h t =Ah t−1 +ϵ t
+B)y t =Ch t +η t
+C)y t =ϕy t−1 +ϵ t
+D)h t = tanh(Whhht−1 +W xhxt)
+3. Why istanhpreferred over ReLU in vanilla RNNs?
+A)ReLU is computationally expensive.
+B)tanh avoids vanishing gradients.
+C)ReLU is unbounded and may cause exploding activations.
+D)tanh is linear.
+4. In a Many-to-One RNN structure, what is used to make the final
+prediction?
+A)The first hidden stateh 1
+B)The average of all hidden states
+C)The final hidden stateh T
+D)The input sequence
+5. Why does Backpropagation Through Time (BPTT) lead to instability
+for long sequences?
+1
+A)Because hidden states are independent across time.
+B)Because gradients depend on repeated multiplication ofW ⊤
+hh.
+C)Because the loss is averaged across time.
+D)Because Softmax saturates.
+6. What determines whether gradients vanish or explode in a linearized
+RNN analysis?
+A)The batch size.
+B)The learning rate.
+C)The eigenvalues of the recurrent weight matrix.
+D)The activation function only.
+7. What is the main idea of Truncated BPTT?
+A)Remove hidden states entirely.
+B)Limit gradient flow to a fixed windowτ.
+C)Freeze recurrent weights.
+D)Train only on small datasets.
+8. In a Deep RNN withLhidden layers, what are the two inputs to
+hidden layerlat timet?
+A)Onlyh (l)
+t−1
+B)Onlyh (l−1)
+t
+C)h (l−1)
+t andh (l)
+t−1
+D)The output layer only
+9. What is the theoretical bottleneck in a standard Encoder–Decoder
+model without attention?
+A)The decoder can not generate sequences.
+B)The encoder hidden state dimension grows with input length.
+C)A fixed-size context vector must encode arbitrarily long sequences.
+D)The model cannot use Softmax.
+10. During Teacher Forcing in Decoder training, what is fed into the next
+time step?
+2
+A)The predicted output.
+B)A random token.
+C)The ground truth previous token.
+D)Only the context vector.
+11. In scaled dot-product attention, why do we divide by
+√
+d?
+A)To normalize embeddings.
+B)To prevent large variance in dot-product scores.
+C)To reduce memory usage.
+D)To enforce orthogonality.
+12. GivenQ∈R n×d andK∈R m×d, what is the dimension ofQK ⊤ in atten-
+tion?
+A)d×d
+B)n×d
+C)n×m
+D)m×n
+13. In a univariate autoregressive RNN without external covariates, what
+is typically used as the inputx t?
+A)Random noise.
+B)The full past history (y t−1, . . . , y1).
+C)The previous observationy t−1.
+D)The hidden stateh t−1.
+14. In a Many-to-Many (synchronized) RNN setting, how are outputs gen-
+erated?
+A)Only after the final time step.
+B)Only at the first time step.
+C)At every time step aligned with the input sequence.
+D)Randomly during training.
+3
