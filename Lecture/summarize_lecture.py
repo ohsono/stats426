@@ -9,13 +9,13 @@ Supported backends:
 Usage:
   # Using Gemini (set your API key first)
   export GEMINI_API_KEY="your-key-here"
-  python summarize_lecture.py Lecture-6_extraced.txt
+  python summarize_lecture.py Lecture-6_extracted.txt
 
   # Using Ollama (make sure ollama is running locally)
-  python summarize_lecture.py Lecture-6_extraced.txt --backend ollama --model llama3
+  python summarize_lecture.py Lecture-6_extracted.txt --backend ollama --model llama3
 
   # Specify output file
-  python summarize_lecture.py Lecture-6_extraced.txt -o Lecture-6-summary.md
+  python summarize_lecture.py Lecture-6_extracted.txt -o Lecture-6-summary.md
 """
 
 import argparse
@@ -40,21 +40,6 @@ Follow these rules:
 - End with a brief "Key Takeaways" section summarizing the most important points.
 """
 
-
-
-def extract_text(pdf_path, output_path):
-    print(f"Extracting text from {pdf_path}...")
-    try:
-        reader = pypdf.PdfReader(pdf_path)
-        text = ""
-        for page in reader.pages:
-            text += page.extract_text() + "\n"
-        
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(text)
-        print(f"Successfully extracted text to {output_path}")
-    except Exception as e:
-        print(f"Error extracting text: {e}")
 
 def read_input(path: str) -> str:
     with open(path, "r", encoding="utf-8") as f:
@@ -131,41 +116,25 @@ def summarize_ollama(text: str, model: str) -> str:
         sys.exit(1)
 
 
-def main(): 
-    parser = argparse.ArgumentParser(description="Extract text from a PDF file / Summarmize lecture text using a free LLM.")
-    parser.add_argument("-h","--input", help="Path to the file to be extraced to text or summarized")
-    parser.add_argument(
-        "-i",
-        "--input",
-        action="store_true", 
-        help="If set, treat input as PDF and extract text instead of summarizing"
+def main():
+    parser = argparse.ArgumentParser(
+        description="Summarize lecture text using a free LLM."
     )
-
+    parser.add_argument(
+        "input",
+        help="Path to the extracted lecture text file (.txt)"
+    )
     parser.add_argument(
         "-o",
         "--output",
-        help="Output format either markdown or text file (default: <input>_extraced.txt)",
+        help="Output Markdown file (default: <input>-summary.md)",
     )
-
-    parser.add_argument(
-        "--extract",
-        action="store_true",
-        help="If set, extract text from PDF instead of summarizing using an LLM",
-    )
-
-    parser.add_argument(
-        "--summarize",
-        action="store_true",
-        help="If set, summarize the input text using an LLM instead of extracting text from PDF",
-    )
-
     parser.add_argument(
         "--backend",
         choices=["gemini", "ollama"],
         default="gemini",
         help="LLM backend to use (default: gemini)",
     )
-
     parser.add_argument(
         "--model",
         help="Model name (default: gemini-2.0-flash for gemini, llama3 for ollama)",
@@ -173,16 +142,16 @@ def main():
 
     args = parser.parse_args()
 
-    # Resolve defaults
+    # Resolve default model
     if args.model is None:
         args.model = {
             "gemini": "gemini-2.0-flash",
             "ollama": "llama3",
         }[args.backend]
 
+    # Resolve default output path: strip _extracted/_extraced suffix, add -summary.md
     if args.output is None:
         base = os.path.splitext(args.input)[0]
-        # strip _extraced / _extracted suffix
         for suffix in ("_extraced", "_extracted"):
             if base.endswith(suffix):
                 base = base[: -len(suffix)]
@@ -193,6 +162,7 @@ def main():
     text = read_input(args.input)
     print(f"Read {len(text)} characters from {args.input}")
     print(f"Using backend: {args.backend} / model: {args.model}")
+    print(f"Output will be written to: {args.output}")
 
     # Summarize
     if args.backend == "gemini":
@@ -213,12 +183,6 @@ def main():
         f.write(summary)
     print(f"Summary written to {args.output}")
 
-def main():
-    args1=argparse.ArgumentParser(description="Extract text from a PDF file")
-    args1.add_argument("pdf_path", help="Path to the PDF file")
-    args1.add_argument("output_path", help="Path to save the extracted text")
-    args = args1.parse_args()
-    extract_text(args.pdf_path, args.output_path)   
 
 if __name__ == "__main__":
     main()

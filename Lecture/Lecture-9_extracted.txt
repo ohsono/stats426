@@ -1,0 +1,1089 @@
+GNN
+Graph Neural Networks
+George Michailidis
+gmichail@ucla.edu
+STAT 426
+George Michailidis GNN 1 / 52
+GNN
+Motivation
+Recap: Tabular Data
+When dealing with standard classification (categorical outcome) or regression
+tasks and tabular data, we traditionally rely on Multi-Layer Perceptrons
+(MLPs).
+MLPs utilize a straightforward architecture consisting of an input layer,
+hidden layers, and an output layer to map the predictors/features to the
+outcome variable(s).
+x1
+x2
+x3
+h1
+h2
+h3
+h4
+y1
+y2
+Input Layer
+Hidden Layer
+Output Layer
+George Michailidis GNN 2 / 52
+GNN
+Motivation
+Recap: Image Data
+Another common form of grid-structured data is images.
+Images are arranged in neat, uniform 2D/3D grids of pixels.
+This topology is perfectly suited for Convolutional Neural Networks (CNNs)
+which rely on fixed-size sliding windows.
+Input Image (5×5)
+Receptive Field
+Convolution
+(Shared Weights)
+Feature Map (3×3)
+George Michailidis GNN 3 / 52
+GNN
+Motivation
+Recap: Sequential Data
+Time evolving (or more generally ordered) observations.
+We typically process this sequential data using Recurrent Neural Networks
+(RNNs) and their variants (LSTMs/GRUs).
+xt−1
+ht−1
+yt−1
+xt
+ht
+yt
+xt+1
+ht+1
+yt+1
+Wxh
+Why
+Wxh
+Why
+Wxh
+Why
+Whh Whh
+Sequential Input (e.g., Time Series)
+Sequential Output
+George Michailidis GNN 4 / 52
+GNN
+graph Data and their Representation
+Graph Data
+Graphs are vital because they accurately model real-world phenomena across
+various domains; examples include:
+Social networks: Modeling relationships and tracking influence propagation.
+Molecules: Predicting chemical properties that depend heavily on structural
+layout.
+Citation networks: Forming the basis of knowledge graphs and
+recommendation systems.
+Traffic systems: Routing and predicting congestion dynamically.
+George Michailidis GNN 5 / 52
+GNN
+Graph Data and their Representation
+Translating to Graph Representations: Social Networks
+To process complex structures computationally, we translate them into
+mathematical graphs.
+In a Social Network, individuals or accounts become nodes, and their
+interactions (e.g., follows, friendships, messages) become edges.
+User A
+User B
+User C
+User D
+User E
+User F
+User G
+Central Node
+(High Degree)
+George Michailidis GNN 6 / 52
+GNN
+Graph Data and their Representation
+Translating to Graph Representations: Molecules
+Similarly, physical structures like molecules map perfectly to graphs.
+In this topological graph of a caffeine molecule, atoms become nodes (with
+elemental features) and chemical bonds become edges.
+N
+C
+N
+C
+C
+C
+N
+C
+N
+C
+C
+C
+O
+C
+O
+C
+George Michailidis GNN 7 / 52
+GNN
+Graph Data and their Representation
+Anatomy of a Graph: Topology
+A graphG= (V,E) consists of:
+Nodes/Vertices (V): Represent the core entities (e.g., the individual atoms in
+our caffeine molecule, or users in a social network).
+Edges (E): Represent the direct connections or relationships between those
+entities (e.g., chemical bonds, friendships).
+A
+B C
+D
+George Michailidis GNN 8 / 52
+GNN
+Graph Data and their Representation
+Anatomy of a Graph: Features (Attributes/Covariates)
+A graphG= (V,E,X,E f ) with attributes adds features to the structure:
+Node Features (X∈R |V|×D ): A vector describing the node. For a molecule,
+this could be atomic number, charge, and mass. For a user, it could be age,
+location, and post frequency.
+Edge Features (E f ): Vectors or scalars describing the relationship, such as
+the type of chemical bond (single/double) or the strength of a friendship.
+A
+B C
+D
+xA = [0.1,1.4,0]
+xB = [0.8,0.2,1] xC = [0.5,0.9,0]
+xD = [0.3,0.1,1]
+bond: 1 bond: 2
+bond: 1 bond: 1
+bond: 1
+George Michailidis GNN 9 / 52
+GNN
+Application Tasks
+Prediction Tasks on Graphs
+Just as we have image classification, semantic segmentation, and object detection
+for CNNs, graphs have three primary levels of prediction tasks.
+1. Node-level: Predicting properties of
+individual nodes.
+2. Edge-level: Predicting properties of
+pairs of nodes (links).
+3. Graph-level: Predicting properties of
+the entire graph.
+Node-Level
+Edge-Level
+Graph-Level
+George Michailidis GNN 10 / 52
+GNN
+Application Tasks
+1. Node-Level Tasks (Node Classification)
+Goal: Predict the label or feature of an
+unlabeled node.
+Analogy: Semantic segmentation
+(pixel-level prediction).
+Examples:
+▶ Spam/bot detection in social
+networks.
+▶ Document classification in citation
+networks (e.g., Cora dataset).
+Key Insight: We leverage
+homophily—connected nodes tend to share
+similar properties.
+H
+H
+?
+B
+?
+B
+Predicting classes
+for ‘?’ nodes
+George Michailidis GNN 11 / 52
+GNN
+Application Tasks
+2. Edge-Level Tasks (Link Prediction)
+Goal: Predict whether an edge exists
+between two nodes, or the type of the
+edge.
+Examples:
+▶ Recommendations: Will User A buy
+Item B? (Bipartite graph).
+▶ Social Networks: Friend
+recommendations.
+▶ Knowledge Graphs: Completing facts
+(e.g., [Rick Schoenberg] educated at− − − − − − − →
+[?]).
+U1
+U2
+Item A
+Item B
+Purchased
+Purchased
+?
+Users Items
+George Michailidis GNN 12 / 52
+GNN
+Application Tasks
+3. Graph-Level Tasks (Graph Classification)
+Goal: Predict a property of the
+entire graph.
+Analogy: Image classification.
+Examples:
+▶ Drug Discovery: Is this molecule
+toxic? Will it bind to a specific
+protein?
+▶ Program Analysis: Does this
+control-flow graph contain a
+vulnerability?
+SAFE
+TOXIC
+George Michailidis GNN 13 / 52
+GNN
+Connections & Graph Representations
+More on Graph with Attributes Representations
+As mentioned, a graphG= (V,E) consists of vertices (nodes)Vand edgesE.
+To feed this into a neural network architecture, we need matrices:
+Adjacency Matrix (A∈R N×N ):
+Captures topology.A ij = 1 if edge
+exists betweeniandj.
+Node Feature Matrix
+(X∈R N×D ):Captures attributes.
+Rowicontains theD-dim feature
+for nodei.
+Edge Matrix:(Optional) Attributes
+like distance/type/strength.
+1 2
+3 4
+A=
+
+
+0 1 1 0
+1 0 0 1
+1 0 0 0
+0 1 0 0
+
+
+X=
+
+
+x11 x12
+x21 x22
+x31 x32
+x41 x42
+
+
+George Michailidis GNN 14 / 52
+GNN
+Motivation: Why do we need Graph Neural Networks?
+Why not just use an MLP?
+The Naive Approach: Flatten the adjacency matrixA∈R N×N and feature matrix
+X∈R N×F , concatenate them, and feed the giant vector into a standard
+Multi-Layer Perceptron (MLP).
+Why this can fail catastrophically:
+1. Size Variance: MLPs require fixed-size input layers. Real-world graphs have
+wildly varying numbers of nodesN.
+2. Extreme Sparsity:Ais mostly empty. Real networks haveO(N) edges, but
+the matrix requiresO(N 2) space. An MLP would waste millions of
+parameters multiplying by zeros.
+3. Permutation Sensitivity: The ordering of nodes in an adjacency matrix is
+completely arbitrary!
+George Michailidis GNN 15 / 52
+GNN
+Motivation: Why do we need Graph Neural Networks?
+The Permutation Problem
+If we swap the arbitrary indices of two nodes, the underlying graph is physically
+isomorphic, but the adjacency matrixAchanges completely.
+1 2 3
+Aorig =
+
+
+010
+101
+010
+
+
+Swap 1 & 2
+− − − − − − − →
+2 1 3
+Anew =
+
+
+01 1
+10 0
+10 0
+
+
+An MLP treatsA orig andA new as entirely different inputs. We require
+architectures that are inherently permutation equivariant (node tasks) or
+permutation invariant (graph tasks).
+Remark: Note the analogy with invariance and equivariance notions leveraged in
+CNNs for image data.
+George Michailidis GNN 16 / 52
+GNN
+Motivation: Why do we need Graph Neural Networks?
+Why not just use a CNN?
+CNNs are very good at extracting local features using shared weights (filters).
+Why not apply a filter over the graph?
+Euclidean Data (Images)
+Fixed topological grid.
+A 3×3 filteralwaysprocesses
+exactly 9 pixels.
+Strict spatial ordering (up, down,
+left, right).
+Non-Euclidean Data (Graphs)
+Arbitrary topology.
+Node A might have 2 neighbors;
+Node B might have 200; Node C
+might have 0.
+No concept of spatial direction or
+ordering.
+The Core Challenge: We need a convolution operation that dynamically adapts to
+a local neighborhood of any size and any ordering.
+George Michailidis GNN 17 / 52
+GNN
+Motivation: Why do we need Graph Neural Networks?
+Why not just use an RNN?
+RNNs handle arbitrary lengths well. What if we just “traverse” the graph (e.g.,
+via Depth First Search algorithm or random walk) and feed the resulting sequence
+of nodes into an RNN?
+A B
+C D
+Input Graph
+DFS 1 Seq 1: A→B→D→C
+DFS 2 Seq 2: C→A→B→D
+Why this fails:
+Loss of structural integrity: A graph has no natural ”start” or ”end”.
+Sequence Bias: The RNN will treatSeq 1andSeq 2as drastically different
+inputs, producing completely different embeddings for the exact same
+underlying graph structure.
+George Michailidis GNN 18 / 52
+GNN
+Motivation: Why do we need Graph Neural Networks?
+What about Attention Mechanisms?
+If MLPs, CNNs, and RNNs fail, what about Transformers and Attention?
+Actually, attention is the perfect fit for graphs!
+Self-Attention (Transformers)
+Computes pairwise importance
+betweenallitems in a set.
+Inherently permutation equivariant
+(order doesn’t matter unless
+positional encoding is added!).
+Treats data as a fully-connected
+graph.
+Graph Attention (GAT)
+We can apply the exact same
+attention mechanism, but mask it
+using the Adjacency MatrixA.
+Nodes only attend to their
+immediate topological neighbors.
+Solves varying neighborhood sizes
+elegantly!
+hi
+hj1 hj2
+hj3
+αi,j1 αi,j2αi,j3
+Target nodeiaggregates features from neigh-
+borsjweighted by learnable attention scoresα.
+George Michailidis GNN 19 / 52
+GNN
+Architecture: The Message Passing Framework
+How do we build a Graph Neural Network?
+We have our graph topologyG= (V,E) and node featuresX.
+Our goal: Compute a new, context-aware embeddingh v for every nodev
+that captures both its own features and the graph structure around it.
+▶ Note: Advanced graphs also have edge features (e.g., chemical bond types),
+which we will incorporate later!
+How do we compute this? By having nodes ”talk” to each other!
+This brings us to the fundamental algorithm of almost all modern GNNs:
+Message Passing.
+George Michailidis GNN 20 / 52
+GNN
+Architecture: The Message Passing Framework
+The Core Idea: Neighborhood Aggregation
+To compute the representation of a target node, we aggregate information
+from its immediate (1-hop) neighbors.
+Just like in a CNN, where stacking 3×3 filters expands the receptive field,
+stackingKGNN layers expands the graph receptive field toKhops.
+George Michailidis GNN 21 / 52
+GNN
+Architecture: The Message Passing Framework
+Expanding the Receptive Field: Layer 1 (1-Hop)
+Let’s look at Target Node A. In the first layer, every node aggregates from its
+direct neighbors.
+A
+B
+C
+D
+E
+F
+Layer 1 Msg
+Layer 1 Msg
+After Layer 1:
+h(1)
+A contains info from{A, B, C}.
+Crucially, at this same step, B aggre-
+gated from D and E!
+George Michailidis GNN 22 / 52
+GNN
+Architecture: The Message Passing Framework
+Expanding the Receptive Field: Layer 2 (2-Hop)
+In thesecond layer, Node A aggregates from B and C again. But B and C now
+contain information fromtheirneighbors!
+A
+B’
+C’
+D
+E
+F
+Layer 2 Msg
+Layer 2 Msg
+After Layer 2:
+Because B’ contains{B, D, E}, when it
+passes a message to A,A indirectly learns
+about D and E.
+h(2)
+A now contains info from its2-hop
+neighborhood:{A, B, C, D, E, F}.
+George Michailidis GNN 23 / 52
+GNN
+Architecture: The Message Passing Framework
+The Message Passing Algorithm (Gilmer et al., 2017)
+Every layertof a Message Passing Neural Network (MPNN) consists of three
+distinct steps for each nodei:
+1. Message: Generate a message from each neighborjto targeti.
+m(t)
+j→i =M t
+
+h(t−1)
+i ,h (t−1)
+j ,e ji
+
+2. Aggregate: Combine all incoming messages from the neighborhoodN(i) into
+a single vector.(Must be permutation invariant!)
+m(t)
+i = AGGREGATE
+
+{m(t)
+j→i |j∈ N(i)}
+
+3. Update: Update the target node’s embedding using its old state and the
+aggregated message.
+h(t)
+i =U t
+
+h(t−1)
+i ,m (t)
+i
+
+George Michailidis GNN 24 / 52
+GNN
+Architecture: The Message Passing Framework
+Deconstructing the Message: What exactly ish j? - I
+When neighborjsendsh (t−1)
+j to our target nodei, what information is actually
+moving across the edge?
+Base Case (t= 1): At the very first layer,h (0)
+j is simplyX j. It is the raw,
+original feature vector of nodej(e.g., a word embedding, a user’s age and
+income, or atomic properties). It contains no graph topology.
+Recursive Case (t>1): By layer 2,h (1)
+j has already gone through its own
+message passing. Therefore,h (1)
+j is a mathematical mixture of:
+1. Nodej’s original features.
+2. The features of all nodes connected toj.
+The Takeaway: Whenjpassesh (t−1)
+j toi, it is not just sending its own
+features. It is sending a highly compressed summary of its entire (t−1)-hop
+neighborhood topology.
+George Michailidis GNN 25 / 52
+GNN
+Architecture: The Message Passing Framework
+Deconstructing the Update: Merging Self and Context
+Step 3 is the Update step:h (t)
+i =U t
+
+h(t−1)
+i ,m (t)
+i
+
+.
+Why do we explicitly needh (t−1)
+i here?
+The Danger of Forgetting: IfU t only looked at the aggregated neighbor
+messages (m (t)
+i ), nodeiwould instantly forget its own unique features. It
+would just become the average of its friends!
+The Mechanics:U t must be a learnable function that balances”who I am”
+with”who my friends are”.
+George Michailidis GNN 26 / 52
+GNN
+Architecture: The Message Passing Framework
+Deconstructing the Update: Merging Self and Context
+Step 3 is the Update step:h (t)
+i =U t
+
+h(t−1)
+i ,m (t)
+i
+
+.
+Why do we explicitly needh (t−1)
+i here?
+The Danger of Forgetting: IfU t only looked at the aggregated neighbor
+messages (m (t)
+i ), nodeiwould instantly forget its own unique features. It
+would just become the average of its friends!
+The Mechanics:U t must be a learnable function that balances”who I am”
+with”who my friends are”.
+George Michailidis GNN 26 / 52
+GNN
+Architecture: The Message Passing Framework
+An Example of an Update Function
+Typically,U t is implemented as a concatenation followed by a linear layer and a
+non-linear activation (like ReLU):
+h(t)
+i = ReLU
+
+W (t) ·
+
+h(t−1)
+i ∥m(t)
+i
+
+
+· ∥ ·
+
+: Concatenates the node’s history with the new neighborhood message,
+explicitly preserving the node’s distinct identity.
+W (t): A learnable weight matrix that decides how much to trust the node’s
+own history versus the neighborhood’s context.
+George Michailidis GNN 27 / 52
+GNN
+Architecture: The Message Passing Framework
+What aboute ji?
+In our first slide, the message generation formula included a third term:
+m(t)
+j→i =M t
+
+h(t−1)
+i ,h (t−1)
+j ,e ji
+
+Why do we need Edge Features (e ji)?
+In many real-world domains, the type of relationship is just as important as
+the nodes themselves.
+Chemistry: Nodes are atoms (Carbon, Oxygen), but edges are bonds. A
+single bond passes electrons (and information) very differently than a double
+or aromatic bond.
+Knowledge Graphs: Node A (Paris) and Node B (France) are connected, but
+the edge feature tells ushow(e.g., ”is capital of” vs. ”is located in”).
+Social Networks: An edge might contain the frequency of interaction, or a
+binary state (Friend vs. Blocked).
+George Michailidis GNN 28 / 52
+GNN
+Architecture: The Message Passing Framework
+Upgrading the Message Function with Edges
+How do we actually injecte ji into the math? Standard node-only models just
+multiply neighbor features by a weight matrix. With edge features, the message
+functionM t becomes slightly more complex.
+Common Strategy 1: Concatenation
+We simply glue the edge feature to the node features before passing them
+through a neural network layer (MLP):
+m(t)
+j→i = MLP
+
+h(t−1)
+i ∥h(t−1)
+j ∥eji
+
+The network learns to naturally weight the neighbor’s information based on
+the context of the connection.
+Common Strategy 2: Edge-Conditioned Weights
+We use the edge feature to dynamically generate the weight matrix itself
+(e.g., Edge-Conditioned Convolution - ECC):
+m(t)
+j→i = MLPedge(eji)·h (t−1)
+j
+George Michailidis GNN 29 / 52
+GNN
+Architecture: The Message Passing Framework
+Advanced MPNNs: Do Edge Features Update?
+Standard GNNs: Edge featurese ji are treated as static attributes. They
+influence how node messages are created, but the edges themselves never
+change across layers.
+Advanced GNNs (e.g., Interaction Networks): We can elevate edges to be
+”first-class citizens.” If nodes can update their state by looking at edges,
+edges should be able to update their state by looking at nodes!
+In this paradigm, we add an Edge Update Step alongside the Node Update
+step:
+e(t)
+ji =U edge
+
+e(t−1)
+ji ,h (t−1)
+i ,h (t−1)
+j
+
+Result:As the network gets deeper, a ”single bond” embedding might
+mathematically evolve into a ”highly stressed single bond” based on the
+shifting states of the two atoms it connects.
+George Michailidis GNN 30 / 52
+GNN
+Architecture: The Message Passing Framework
+Visualizing the 3 Steps
+hj1
+hj2
+hj3
+P
+mj1→i
+mj2→i
+mj3→i
+h(t−1)
+i
+Update (Ut)
+m(t)
+i
+h(t)
+i
+Step 1: Message
+Step 2: Aggregate
+Step 3: Update
+Note: All standard GNN architectures are just specific mathematical choices for
+Mt, AGGREGATE, andU t.
+George Michailidis GNN 31 / 52
+GNN
+Specific Architectures: GCN, GraphSAGE, GAT, GIN
+Architecture 1: Graph Convolutional Networks (GCN)
+GCN (Kipf & Welling, 2017) is the most famous baseline. It uses a fast,
+first-order approximation of spectral graph convolutions.
+GCN Propagation Rule
+H(t) =σ
+
+bD −1/2bAbD −1/2H(t−1) W (t−1)
+
+Let’s look at this from the Message Passing perspective for a single nodei:
+h(t)
+i =σ
+
+ X
+j∈N(i)∪{i}
+1p
+deg(i)deg(j)
+h(t−1)
+j W (t−1)
+
+
+George Michailidis GNN 32 / 52
+GNN
+Specific Architectures: GCN, GraphSAGE, GAT, GIN
+The GCN Propagation Rule
+The Equation:
+H(t) =σ
+
+bD −1/2bAbD −1/2H(t−1) W (t−1)
+
+Matrices Involved:
+bA=A+I: Adjacency matrix with self-loops (node keeps its own features).
+bD: Degree matrix of bA(counts neighbors + self).
+bD −1/2bAbD −1/2: Symmetrically normalized adjacency matrix.
+Symmetric Normalization:
+Stability:Prevents exploding/vanishing features during aggregation.
+Sender Discount:Down-weights messages from nodes that broadcast to
+everyone.
+Receiver Discount:Down-weights messages for nodes that listen to
+everyone.
+George Michailidis GNN 33 / 52
+GNN
+Specific Architectures: GCN, GraphSAGE, GAT, GIN
+More on the GCN Architecture
+h(t)
+i =σ
+
+ X
+j∈N(i)∪{i}
+1p
+deg(i)deg(j)
+h(t−1)
+j W (t−1)
+
+
+Message:h (t−1)
+j W (t−1) (Multiply neighbor features by a weight matrix).
+Aggregate: Summation, scaled by the degrees of both sender and receiver
+1√
+deg(i)deg(j)
+
+.
+Update: Apply a non-linearityσ(like ReLU). Note that GCN adds self-loops
+(bA=A+I), meaning a node passes a message to itself!
+Pros: Simple, highly efficient (O(|E|) scaling), great baseline.
+Cons: Treats all neighbors equally (based only on degree structure), suffers heavily
+from over-smoothing if deep.
+George Michailidis GNN 34 / 52
+GNN
+Specific Architectures: GCN, GraphSAGE, GAT, GIN
+More on the GCN Architecture
+h(t)
+i =σ
+
+ X
+j∈N(i)∪{i}
+1p
+deg(i)deg(j)
+h(t−1)
+j W (t−1)
+
+
+Message:h (t−1)
+j W (t−1) (Multiply neighbor features by a weight matrix).
+Aggregate: Summation, scaled by the degrees of both sender and receiver
+1√
+deg(i)deg(j)
+
+.
+Update: Apply a non-linearityσ(like ReLU). Note that GCN adds self-loops
+(bA=A+I), meaning a node passes a message to itself!
+Pros: Simple, highly efficient (O(|E|) scaling), great baseline.
+Cons: Treats all neighbors equally (based only on degree structure), suffers heavily
+from over-smoothing if deep.
+George Michailidis GNN 34 / 52
+GNN
+Specific Architectures: GCN, GraphSAGE, GAT, GIN
+The Scalability Problem of GCN
+Transductive Learning: Standard GCN requires theentiregraph adjacency
+matrix bAto be in memory simultaneously.
+What if the graph has 2 billion nodes (e.g., Facebook)? We cannot fit bAin
+GPU memory!
+What if a completely new node joins the network tomorrow? GCN would
+require recomputing the whole graph.
+George Michailidis GNN 35 / 52
+GNN
+Specific Architectures: GCN, GraphSAGE, GAT, GIN
+Digression: Spectral vs. Spatial GNNs
+Historically, graph convolutions developed from two very different mathematical
+viewpoints. It is crucial to understand the distinction:
+1. The Spectral Perspective
+Origin: Graph Signal Processing.
+Mechanism: Uses the Graph
+Laplacian and its eigenvectors to
+translate signals into the
+frequency domain (the Graph
+Fourier Transform), applies a
+filter, and transforms back.
+Limitation: Computationally
+expensive (O(N 3)
+eigen-decomposition) and strictly
+tied to a fixed graph structure
+(transductive).
+2. The Spatial Perspective
+Origin: Local routing / Message
+Passing.
+Mechanism: Operates directly on
+the physical graph topology by
+aggregating features from
+immediate neighbors.
+Advantage: Conceptually intuitive,
+highly scalable (via
+mini-batching), and easily handles
+dynamic or entirely new graphs
+(inductive learning).
+The 2017 GCN paper actually started in theSpectraldomain. It established that a first-order
+approximation of a spectral filter is mathematically equivalent to a simpleSpatialmessage-passing
+step! Today, almost all modern GNNs operate spatially.George Michailidis GNN 36 / 52
+GNN
+Specific Architectures: GCN, GraphSAGE, GAT, GIN
+Architecture 2: GraphSAGE
+GraphSAGE (Hamilton et al., 2017) solves this by introducing an Inductive
+framework with Neighborhood Sampling.
+Instead of usingallneighbors, GraphSAGE randomly samples a fixed number
+of neighbors (e.g., 10-25) for each node.
+This breaks the dependency on the full graph, allowing standard mini-batch
+training!
+Because it learns an aggregationfunction(rather than relying on a static
+matrix bA), it can generate embeddings for entirely unseen nodes.
+George Michailidis GNN 37 / 52
+GNN
+Specific Architectures: GCN, GraphSAGE, GAT, GIN
+More on the GraphSAGE Architecture
+GraphSAGE Update Rule
+m(t)
+N(i) = AGGREGATE
+n
+h(t−1)
+j |j∈Sample(N(i))
+o
+h(t)
+i =σ
+
+W (t) ·CONCAT
+
+h(t−1)
+i ,m (t)
+N(i)
+
+Aggregate: GraphSAGE proposes several aggregator choices:
+▶ Mean:Element-wise mean of neighbors.
+▶ Max-Pooling:Apply an MLP to neighbors, then element-wise max.
+▶ LSTM:Apply an LSTM to randomly permuted neighbors.
+Update: Notice it concatenates the old stateh i with the messagem N(i) ,
+rather than just adding them like GCN. This helps preserve central node
+information.
+George Michailidis GNN 38 / 52
+GNN
+Specific Architectures: GCN, GraphSAGE, GAT, GIN
+The Weighting Problem of GCN & GraphSAGE
+GCN scales messages based strictly on node degree.
+GraphSAGE (with Mean aggregation) weights all sampled neighbors equally.
+Key issue:In real life networks, some neighbors are much more important
+than others! (e.g., a close family member vs. a distant acquaintance on a
+social network).
+George Michailidis GNN 39 / 52
+GNN
+Specific Architectures: GCN, GraphSAGE, GAT, GIN
+Architecture 3: Graph Attention Networks (GAT)
+GAT (Veliˇ ckovi´ c et al., 2018) introduces Attention to graph edges.
+Instead of fixed weights, the networklearnsan attention coefficientα ij indicating
+how important neighborj’s features are to nodei.
+GAT Layer
+h(t)
+i =σ
+
+ X
+j∈N(i)∪{i}
+αij Wh(t−1)
+j
+
+
+George Michailidis GNN 40 / 52
+GNN
+Specific Architectures: GCN, GraphSAGE, GAT, GIN
+Visualizing GAT vs GCN
+GCN (Fixed Structural Weights)
+i
+j1
+j2
+j3
+0.33
+0.33
+0.33
+GAT (Learned Attention Weights)
+i
+j1
+j2
+j3
+0.8
+0.1
+0.1
+Note: GAT is effectively a Transformer that uses the graph adjacency matrix as a
+strict attention mask!
+George Michailidis GNN 41 / 52
+GNN
+Specific Architectures: GCN, GraphSAGE, GAT, GIN
+Architecture 3’: Beyond Local Neighborhoods - Graph Transformers
+While GAT applies attention to local edges, Graph Transformers (GTs) treat the
+entire graph as a fully connected sequence of nodes.
+Full Node-to-Node Attention
+The Concept: Every node computes an attention score witheveryother node
+in the graph, regardless of whether a physical edge exists between them.
+Addressing Limitations: Standard Message Passing (and GAT) suffers from
+over-squashing because distant signals must squeeze through local
+neighborhood bottlenecks. GTs solve this by creating directO(1) paths
+between all nodes.
+The Trade-off: Computing dense attention over allNnodes requiresO(N 2)
+compute and memory, meaning standard GTs are primarily used on smaller
+graphs (like molecules).
+George Michailidis GNN 42 / 52
+GNN
+Specific Architectures: GCN, GraphSAGE, GAT, GIN
+Scaling Graph Transformers
+Full node-to-node attention in standard Graph Transformers scales quadratically,
+making it impossible to run on large graphs (like social networks or citation
+networks).
+Modern Solutions to the Scaling Bottleneck:
+Sparse Attention Variants: Instead of computing the fullN×Nmatrix,
+attention is restricted to specific subsets (e.g., only attending to the extended
+k-hop neighborhood or a randomly sampled set of distant nodes).
+Linear Attention / Performers: Uses mathematical kernel tricks to
+approximate the dense Softmax attention matrix without explicitly computing
+it, dropping the complexity to true linearO(N) time.
+Hybrid Local-Global Models: Uses cheap standard Message Passing for local
+structural edges, combined with a Graph Transformer that only routes global
+information through a small, manageable set of added ”virtual nodes.”
+George Michailidis GNN 43 / 52
+GNN
+Specific Architectures: GCN, GraphSAGE, GAT, GIN
+Graph Transformers: Injecting Topology
+If a Graph Transformer computes attention between all nodes, it becomes entirely
+blind to the original graph structure! We must explicitly inject the topology back
+in via encodings.
+1. Positional Encodings (Global Geometry)
+Text Transformers use 1D sequence positions (1, 2, 3...), but graphs have no
+absolute order.
+Laplacian PEs: We compute the eigenvectors of the Graph Laplacian
+(L=D−A). They encode low-frequency structural signals; eigenvectors are
+not literal spatial coordinates, but capture smooth variations over the graph.
+2. Structural Encodings (Local Topology)
+Node-level: Injecting a node’sdegreeoreigenvector centralityinto its initial
+embedding so the model knows its local importance.
+Pair-level (Spatial): Modifying the attention score between nodeiandj
+based on theirShortest Path Distance(SPD) in the original graph.
+George Michailidis GNN 44 / 52
+GNN
+Specific Architectures: GCN, GraphSAGE, GAT, GIN
+The Expressivity Problem
+We have covered GCN, GraphSAGE, GAT, and Graph Transformers. Are these
+models powerful enough to distinguish any two different graphs?
+No! Both paradigms have fundamental mathematical limits:
+1. Standard Message Passing (GCN, GraphSAGE, GAT)
+Upper-bounded by the1-Weisfeiler-Lehman (1-WL) Test. They can not
+distinguish certain symmetric structures (e.g., a hexagon vs. two triangles).
+The Bottleneck: The choice of theAGGREGATEfunction matters deeply.
+(e.g., ”Mean” and ”Max” aggregators lose count information; only ”Sum”
+reaches the 1-WL limit).
+2. Graph Transformers
+Global attention bypasses the local message-passing bottleneck, but
+introduces a new one: treating the graph as a featureless set.
+The Bottleneck: The expressivity of a GT is entirely dictated by its
+Positional/Structural Encodings. Even advanced Laplacian encodings fail to
+distinguish strongly regular graphs due to eigenvalue symmetries.
+George Michailidis GNN 45 / 52
+GNN
+Specific Architectures: GCN, GraphSAGE, GAT, GIN
+The Expressivity Problem
+We have covered GCN, GraphSAGE, GAT, and Graph Transformers. Are these
+models powerful enough to distinguish any two different graphs?
+No! Both paradigms have fundamental mathematical limits:
+1. Standard Message Passing (GCN, GraphSAGE, GAT)
+Upper-bounded by the1-Weisfeiler-Lehman (1-WL) Test. They can not
+distinguish certain symmetric structures (e.g., a hexagon vs. two triangles).
+The Bottleneck: The choice of theAGGREGATEfunction matters deeply.
+(e.g., ”Mean” and ”Max” aggregators lose count information; only ”Sum”
+reaches the 1-WL limit).
+2. Graph Transformers
+Global attention bypasses the local message-passing bottleneck, but
+introduces a new one: treating the graph as a featureless set.
+The Bottleneck: The expressivity of a GT is entirely dictated by its
+Positional/Structural Encodings. Even advanced Laplacian encodings fail to
+distinguish strongly regular graphs due to eigenvalue symmetries.
+George Michailidis GNN 45 / 52
+GNN
+Specific Architectures: GCN, GraphSAGE, GAT, GIN
+Architecture 4: Graph Isomorphism Networks (GIN)
+GIN (Xu et al., 2019) was designed specifically to maximize the mathematical
+expressive power of GNNs.
+It is proven to be as powerful as the 1-dim Weisfeiler-Lehman (WL) graph
+isomorphism test.
+It strictly uses SUM aggregation, and applies MLPs everywhere.
+GIN Update Rule
+h(t)
+i = MLP(t)
+
+(1 +ϵ (t))h(t−1)
+i +
+X
+j∈N(i)
+h(t−1)
+j
+
+
+The learned parameterϵallows the network to distinguish the node’s own features
+from its neighbors’ features.
+George Michailidis GNN 46 / 52
+GNN
+Specific Architectures: GCN, GraphSAGE, GAT, GIN
+Why GIN uses SUM instead of MEAN/MAX
+i
+Graph 1 (2 Neighbors)
+i
+Graph 2 (4 Neighbors)
+Mean Aggregation:Graph 1 = Red+Red
+2 =Red. Graph 2 = 4×Red
+4 =Red.
+(Fails!)
+Sum Aggregation:Graph 1 = 2×Red. Graph 2 = 4×Red. (Succeeds!)
+GIN is crucial for Graph-Level tasks (like molecular chemistry) where subtle
+structural counts define properties.
+George Michailidis GNN 47 / 52
+GNN
+Training Issues & Summary
+The Limits of Deep GNNs: Two Major Bottlenecks
+Why can’t we simply stack 100 layers to learn long-range graph interactions?
+Deep GNNs suffer from two distinct mathematical constraints:
+1. Over-smoothing (The Convergence Problem)
+Mechanism: With every layer, nodes repeatedly average or aggregate features
+from a wider neighborhood.
+Result: The representations of all nodes blur together, eventually converging
+to become mathematically indistinguishable.
+Analogy: Mixing too many paint colors together until everything turns into a
+uniform muddy brown.
+2. Over-squashing (The Bottleneck Problem)
+Mechanism:In real graphs, the neighborhood size growsexponentiallywith
+each hop. Message passing forces this massive amount of data into a single,
+fixed-sizevector.
+Result: Important signals from distant nodes get ”squashed” and lost as
+noise, preventing the model from learning long-range dependencies.
+Analogy: Trying to compress a 1,000-page textbook into a single tweet. The
+nuanced, distant details are inevitably lost.
+George Michailidis GNN 48 / 52
+GNN
+Training Issues & Summary
+Architecture Summary Matrix
+Architecture Key Innovation Best Use Case
+GCNSpectral approximation Simple, efficient baseline. Good for
+Transductive node classification.
+GraphSAGENeighbor Sampling Scaling to massive graphs. Inductive
+learning on unseen nodes.
+GATEdge Attention Heterogeneous graphs where some
+neighbors matter more than others.
+GINWL-Test Expressivity Graph classification (e.g., drug discov-
+ery) requiring strict structure ID.
+George Michailidis GNN 49 / 52
+GNN
+Practical Training Notes
+Practical Training 1: Deep GNNs & Regularization
+If you must build a deeper GNN (e.g., 8+ layers), you need specific architectural
+tricks to prevent the network from collapsing via over-smoothing or over-fitting.
+1. Residual (Skip) Connections
+The Trick: Add the input of the layer directly to its output:
+H(l+1) = GNN(H(l)) +H (l).
+Why it works: It gives the model a ”gradient highway” and ensures that a
+node retains its original, localized features even after many rounds of
+neighborhood aggregation. It directly combats over-smoothing.
+2. DropEdge (Data Augmentation for Graphs)
+The Trick: Similar to standard Dropout, but instead of zeroing out node
+features, we randomly remove a percentage ofedgesfrom the adjacency
+matrix during each training epoch.
+Why it works: It acts as a powerful regularizer that prevents over-fitting.
+Crucially, it also slows down over-smoothing by artificially sparsifying the
+graph, limiting how fast information spreads.
+George Michailidis GNN 50 / 52
+GNN
+Practical Training Notes
+Practical Training 2: Normalization in Graphs
+Just like in CNNs or Transformers, aggregating hundreds of vectors can cause
+feature values to explode. Normalization stabilizes the training dynamics.
+BatchNorm (Node-wise)
+Normalizes each feature channel
+across all nodes in the current
+training batch.
+Best For: Large, single-graph node
+classification tasks where the
+batch size (number of nodes) is
+sufficiently large and stable.
+LayerNorm (Feature-wise)
+Normalizes across the feature
+dimension for each individual
+node, independently of the batch.
+Best For: Highly variable graph
+sizes (e.g., molecule datasets
+where one graph has 10 nodes and
+the next has 100) or Graph
+Transformers.
+Normalization is typically appliedafterthe aggregation step butbeforethe
+non-linear activation function (e.g., ReLU).
+George Michailidis GNN 51 / 52
+GNN
+Practical Training Notes
+Practical Training 3: Scalability & Mini-Batching
+Standard deep learning loads data in isolated mini-batches. You can not do this
+easily with graphs because nodes are connected!
+The ”Neighborhood Explosion” Problem
+To compute the embedding for Node A in a 3-layer GNN, you need Node A’s
+neighbors,theirneighbors, andtheirneighbors. On dense graphs (like social
+networks), this quickly requires loading the entire graph into GPU memory.
+Solutions for Large Graphs
+Neighbor Sampling (GraphSAGE): Instead of taking all neighbors, we
+randomly sample a fixed maximum number of neighbors (e.g., 10) per node
+at each layer. This caps the memory footprint.
+Subgraph Sampling (Cluster-GCN): We use a clustering algorithm to break
+the massive graph into smaller, densely connected subgraphs. We then train
+on these subgraphs as standard, isolated mini-batches.
+George Michailidis GNN 52 / 52
