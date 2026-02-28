@@ -1,6 +1,6 @@
 # Claude
 .claude/
-CLAUDE.md
+!CLAUDE.md
 
 # Mac OS files
 ._*
@@ -26,3 +26,12 @@ dataset/
 
 # Python cache
 __pycache__
+
+# checkpoints
+checkpoints/
+
+# logs
+logs/
+
+# data
+data/
