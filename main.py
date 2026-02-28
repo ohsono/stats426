@@ -368,6 +368,57 @@ def cmd_evaluate(args):
     logger.close()
 
 
+# ===================================================================
+# compare — Classical ML comparison on CNN features
+# ===================================================================
+
+def cmd_compare(args):
+    """Extract CNN features and compare classical ML models."""
+    from data.unify import num_classes
+    from evaluation.classical_ml import run_comparison
+
+    device = get_device()
+    n_cls = num_classes()
+    model = build_model(args.model, n_cls)
+
+    # Auto-find or use specified checkpoint
+    ckpt_path = Path(args.checkpoint) if args.checkpoint else CHECKPOINT_DIR / args.model / "best_model.pth"
+    if not ckpt_path.exists():
+        print(f"❌ Checkpoint not found: {ckpt_path}")
+        print(f"   Train the model first: python main.py train --model {args.model}")
+        sys.exit(1)
+
+    state = torch.load(ckpt_path, map_location=device, weights_only=False)
+    if "model_state_dict" in state:
+        model.load_state_dict(state["model_state_dict"])
+        print(f"📦 Loaded {args.model} checkpoint: {ckpt_path} (epoch {state.get('epoch', '?')})")
+    else:
+        model.load_state_dict(state)
+        print(f"📦 Loaded weights: {ckpt_path}")
+
+    model.to(device).eval()
+
+    # Build loaders
+    loaders = build_dot_loaders(batch_size=args.batch_size)
+
+    print(f"\n🔬 Classical ML Comparison (features from {args.model})")
+    print(f"   Training on train split, evaluating on {args.split} split\n")
+
+    report = run_comparison(
+        model=model,
+        train_loader=loaders["train"],
+        test_loader=loaders[args.split],
+        model_name=args.model,
+        device=device,
+        verbose=True,
+    )
+
+    print(f"\n{report.summary_table()}")
+    print(f"\n   Feature dim: {report.feature_dim}")
+    print(f"   Train samples: {report.n_train}, Test samples: {report.n_test}")
+    print(f"   Classes: {report.n_classes}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Traffic Sign Recognition — Monolithic CLI",
@@ -409,6 +460,16 @@ def main():
     p_eval.add_argument("--verbose", action="store_true",
                          help="Enable verbose file logging")
 
+    # compare
+    p_comp = sub.add_parser("compare", help="Compare classical ML models on CNN features")
+    p_comp.add_argument("--model", default="resnet10",
+                        choices=["baseline", "advanced", "resnet10", "orion"])
+    p_comp.add_argument("--split", default="test",
+                        choices=["val", "test", "ood"])
+    p_comp.add_argument("--checkpoint", default=None,
+                        help="Path to checkpoint (default: auto-find best)")
+    p_comp.add_argument("--batch-size", type=int, default=32)
+
     args = parser.parse_args()
     if args.command == "info":
         cmd_info(args)
@@ -416,6 +477,8 @@ def main():
         cmd_train(args)
     elif args.command == "evaluate":
         cmd_evaluate(args)
+    elif args.command == "compare":
+        cmd_compare(args)
     else:
         parser.print_help()
 
