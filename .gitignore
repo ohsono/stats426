@@ -32,3 +32,6 @@ checkpoints/
 
 # logs
 logs/
+
+# demo file
+proposal/Traffic_Sign_Classification_PyTorch_Full (1).ipynb
