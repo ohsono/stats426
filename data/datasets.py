@@ -31,6 +31,10 @@ from data.unify import (
     GTSRB_LABEL_MAP,
 )
 
+# Sentinel label: marks samples used for domain adaptation only.
+# Samples with this label are NOT included in the supervised CE loss.
+DOMAIN_LABEL: int = -1
+
 # ---------------------------------------------------------------------------
 # Base class
 # ---------------------------------------------------------------------------
@@ -121,13 +125,18 @@ class DOTDataset(TrafficSignDataset):
 
 class GTSRBDataset(TrafficSignDataset):
     """
-    German Traffic Sign Recognition Benchmark.
+    German Traffic Sign Recognition Benchmark (Kaggle CSV format).
 
-    Uses torchvision's built-in GTSRB loader which handles download and
-    label mapping automatically.  GTSRB classes (0–42) are mapped into
-    the DOT unified index via GTSRB_LABEL_MAP.
+    Primary path: reads Train.csv / Test.csv with columns
+        Width, Height, Roi.X1, Roi.Y1, Roi.X2, Roi.Y2, ClassId, Path
+    Crops each image to the ROI bounding box for a tighter sign crop.
 
-    Falls back to local directory scan if torchvision loading fails.
+    Only GTSRB classes that have a mapping in GTSRB_LABEL_MAP are
+    included when ``dot_only=True`` (the default).
+
+    Fallback: scans Train/ or Test/ subdirectories (no ROI applied).
+    Used when no CSV exists — keeps all classes, preserving test fixture
+    compatibility.
     """
 
     source = "gtsrb"
@@ -137,43 +146,69 @@ class GTSRBDataset(TrafficSignDataset):
         root: Path,
         transform: Optional[Callable] = None,
         split: str = "train",
-        download: bool = True,
+        download: bool = True,       # retained for API compatibility; ignored
+        dot_only: bool = True,       # filter to only DOT-mapped classes (CSV mode)
+        apply_roi_crop: bool = True, # crop to ROI bounding box (CSV mode)
     ):
         super().__init__(root, transform)
         self.split = split
-        self._tv_dataset = None
-        self._load(download)
+        self.dot_only = dot_only
+        self.apply_roi_crop = apply_roi_crop
+        # ROI info parallel to self.samples; None means no crop to apply
+        self._roi_info: List[Optional[Tuple[int, int, int, int]]] = []
+        self._load()
 
-    def _load(self, download: bool):
-        """Load GTSRB via torchvision."""
-        try:
-            import torchvision
-            self._tv_dataset = torchvision.datasets.GTSRB(
-                root=str(self.root),
-                split=self.split,
-                download=download,
-                transform=None,  # We apply our own transform in __getitem__
-            )
-            # Build samples list with DOT-mapped labels
-            for i in range(len(self._tv_dataset)):
-                # torchvision GTSRB stores (path, label) in _samples
-                if hasattr(self._tv_dataset, '_samples'):
-                    gtsrb_label = self._tv_dataset._samples[i][1]
-                else:
-                    # Fallback: access via __getitem__ (slower)
-                    _, gtsrb_label = self._tv_dataset[i]
-                dot_label = GTSRB_LABEL_MAP.get(gtsrb_label, -1)
-                if dot_label >= 0:
-                    self.samples.append((str(i), dot_label))
-                else:
-                    # Keep GTSRB class ID if no DOT mapping exists
-                    self.samples.append((str(i), gtsrb_label))
-        except Exception:
-            # Fallback: scan directory
+    def _load(self):
+        """Try CSV-based loading first; fall back to directory scan."""
+        csv_name = "Train.csv" if self.split == "train" else "Test.csv"
+        csv_path = self.root / csv_name
+        if csv_path.exists():
+            self._load_from_csv(csv_path)
+        else:
             self._scan_directory()
 
+    def _load_from_csv(self, csv_path: Path):
+        """
+        Load samples from Kaggle-format GTSRB CSV.
+
+        CSV columns: Width, Height, Roi.X1, Roi.Y1, Roi.X2, Roi.Y2, ClassId, Path
+        Path is relative to self.root (e.g. ``Train/20/00020_00000_00000.png``).
+        """
+        with open(csv_path, newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                gtsrb_label = int(row["ClassId"])
+                dot_label = GTSRB_LABEL_MAP.get(gtsrb_label)
+                if self.dot_only and dot_label is None:
+                    continue  # skip classes with no DOT mapping
+                label = dot_label if dot_label is not None else gtsrb_label
+
+                rel_path = row["Path"].strip()
+                img_path = self.root / rel_path
+                if not img_path.exists():
+                    continue
+
+                self.samples.append((rel_path, label))
+
+                if self.apply_roi_crop:
+                    roi: Optional[Tuple[int, int, int, int]] = (
+                        int(row["Roi.X1"]),
+                        int(row["Roi.Y1"]),
+                        int(row["Roi.X2"]),
+                        int(row["Roi.Y2"]),
+                    )
+                else:
+                    roi = None
+                self._roi_info.append(roi)
+
     def _scan_directory(self):
-        """Fallback: scan Train/ directory with class subdirectories."""
+        """
+        Fallback: scan Train/ or Test/ subdirectory with class subdirs.
+
+        No ROI information is available here — no additional crop applied.
+        Used primarily by synthetic test fixtures (no CSV present).
+        Keeps all GTSRB class IDs regardless of ``dot_only`` setting.
+        """
         base = self.root / "Train" if self.split == "train" else self.root / "Test"
         if not base.exists():
             return
@@ -189,17 +224,26 @@ class GTSRBDataset(TrafficSignDataset):
                 for img_file in class_dir.glob(ext):
                     rel = img_file.relative_to(self.root)
                     self.samples.append((str(rel), dot_label))
+                    self._roi_info.append(None)
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int]:
-        if self._tv_dataset is not None:
-            # Use torchvision dataset directly
-            real_idx = int(self.samples[idx][0])
-            label = self.samples[idx][1]
-            image, _ = self._tv_dataset[real_idx]
-            if self.transform is not None:
-                image = self.transform(image)
-            return image, label
-        return super().__getitem__(idx)
+        rel_path, label = self.samples[idx]
+        img_path = self.root / rel_path
+        image = Image.open(img_path).convert("RGB")
+
+        roi = self._roi_info[idx] if idx < len(self._roi_info) else None
+        if roi is not None:
+            x1, y1, x2, y2 = roi
+            w, h = image.size
+            x1 = max(0, min(x1, w - 1))
+            y1 = max(0, min(y1, h - 1))
+            x2 = max(x1 + 1, min(x2, w))
+            y2 = max(y1 + 1, min(y2, h))
+            image = image.crop((x1, y1, x2, y2))
+
+        if self.transform is not None:
+            image = self.transform(image)
+        return image, label
 
 
 # ---------------------------------------------------------------------------
@@ -234,10 +278,12 @@ class LISADataset(TrafficSignDataset):
         transform: Optional[Callable] = None,
         label_map: Optional[Dict[str, int]] = None,
         min_crop_size: int = 8,
+        domain_only: bool = False,
     ):
         super().__init__(root, transform)
         self.label_map = label_map or LISA_LABEL_MAP
         self.min_crop_size = min_crop_size
+        self.domain_only = domain_only
         # Store bbox info for cropping at load time
         self._bbox_info: List[Tuple[str, int, int, int, int]] = []
         self._scan()
@@ -293,7 +339,8 @@ class LISADataset(TrafficSignDataset):
                 img_path = self._resolve_image_path(filename)
                 if img_path and img_path.exists():
                     rel = str(img_path.relative_to(self.root))
-                    self.samples.append((rel, dot_label))
+                    effective_label = DOMAIN_LABEL if self.domain_only else dot_label
+                    self.samples.append((rel, effective_label))
                     self._bbox_info.append((rel, x1, y1, x2, y2))
 
     def _resolve_image_path(self, filename: str) -> Optional[Path]:
@@ -351,18 +398,32 @@ class LISADataset(TrafficSignDataset):
 
 class BDD100KDataset(TrafficSignDataset):
     """
-    BDD100K traffic sign crops.
+    BDD100K traffic sign crops for domain adaptation.
 
-    This dataset requires a preprocessing step to extract traffic sign
-    crops from the full 1280×720 scene images using bounding box annotations.
+    Supports two loading modes selected automatically:
 
-    Expected layout after preprocessing::
-        root/
-            crops/
-                <image_id>_<box_id>.jpg
-            annotations.json
+    **Mode A — on-the-fly (primary)**:
+        Uses per-image JSON annotations co-located next to images in
+        ``root/100k/{split}/``.  Scans all JSON files at init and stores
+        bounding-box coordinates; crops are extracted in ``__getitem__``.
+        All crops receive ``DOMAIN_LABEL = -1`` (domain adaptation only).
 
-    If no preprocessed crops exist, this loader returns an empty dataset.
+        Layout::
+            root/100k/train/{name}.jpg
+            root/100k/train/{name}.json   ← {"frames": [{"objects": [...]}]}
+
+    **Mode B — pre-extracted (fallback)**:
+        Reads from ``root/annotations.json`` index and ``root/crops/`` dir.
+        Supports fine-grained labels when ``category`` is in
+        ``BDD100K_LABEL_MAP`` and ``domain_only=False``.
+
+        Layout::
+            root/annotations.json   ← [{"image": "crops/x.jpg", "category": "stop"}]
+            root/crops/x.jpg
+
+    **Note**: BDD100K bounding-box annotations use the generic ``"traffic sign"``
+    category (no fine-grained type).  Fine-grained labels require an external
+    annotation file; run ``data/preprocess_bdd100k.py`` for details.
     """
 
     source = "bdd100k"
@@ -371,27 +432,122 @@ class BDD100KDataset(TrafficSignDataset):
         self,
         root: Path,
         transform: Optional[Callable] = None,
+        split: str = "train",
         annotation_file: str = "annotations.json",
         label_map: Optional[Dict[str, int]] = None,
+        min_crop_size: int = 16,
+        domain_only: bool = True,
+        max_samples: Optional[int] = None,
     ):
         super().__init__(root, transform)
+        self.split = split
         self.annotation_file = self.root / annotation_file
         self.label_map = label_map or BDD100K_LABEL_MAP
+        self.min_crop_size = min_crop_size
+        self.domain_only = domain_only
+        self.max_samples = max_samples
+        # Parallel to self.samples: None = already-cropped file; 5-tuple = live crop
+        self._bbox_info: List[Optional[Tuple[str, int, int, int, int]]] = []
         self._scan()
 
     def _scan(self):
-        if not self.annotation_file.exists():
-            return
+        """Select Mode A (live) or Mode B (pre-extracted)."""
+        if self.annotation_file.exists():
+            self._scan_preextracted()
+        else:
+            live_dir = self.root / "100k" / self.split
+            if live_dir.exists():
+                self._scan_live(live_dir)
+            else:
+                # No data available — empty dataset
+                pass
+
+    def _scan_preextracted(self):
+        """Mode B: load from annotations.json and pre-cropped images."""
         with open(self.annotation_file) as f:
             annotations = json.load(f)
         for entry in annotations:
             img_rel = entry.get("image", "")
             cat = entry.get("category", "").lower()
-            label = self.label_map.get(cat)
-            if label is None:
-                continue
-            if (self.root / img_rel).exists():
+            if self.domain_only:
+                label = DOMAIN_LABEL
+            else:
+                label = self.label_map.get(cat)
+                if label is None:
+                    continue
+            img_abs = self.root / img_rel
+            if img_abs.exists():
                 self.samples.append((img_rel, label))
+                self._bbox_info.append(None)
+            if self.max_samples and len(self.samples) >= self.max_samples:
+                break
+
+    def _scan_live(self, live_dir: Path):
+        """
+        Mode A: scan per-image JSON files in ``100k/{split}/``.
+
+        For each JSON, extracts all ``"traffic sign"`` objects with
+        bounding-box dimensions ≥ ``min_crop_size``.  macOS resource-fork
+        files (``._*.json``) are skipped.
+        """
+        for json_file in live_dir.iterdir():
+            if json_file.suffix != ".json":
+                continue
+            if json_file.stem.startswith("._"):
+                continue
+
+            jpg_path = json_file.with_suffix(".jpg")
+            if not jpg_path.exists():
+                continue
+
+            try:
+                with open(json_file, encoding="utf-8", errors="ignore") as f:
+                    ann = json.load(f)
+            except (json.JSONDecodeError, OSError):
+                continue
+
+            for frame in ann.get("frames", []):
+                for obj in frame.get("objects", []):
+                    if obj.get("category") != "traffic sign":
+                        continue
+                    box = obj.get("box2d")
+                    if box is None:
+                        continue
+                    x1, y1 = box["x1"], box["y1"]
+                    x2, y2 = box["x2"], box["y2"]
+                    if (x2 - x1) < self.min_crop_size or (y2 - y1) < self.min_crop_size:
+                        continue
+
+                    rel = str(jpg_path.relative_to(self.root))
+                    self.samples.append((rel, DOMAIN_LABEL))
+                    self._bbox_info.append((
+                        str(jpg_path),
+                        int(x1), int(y1), int(x2), int(y2),
+                    ))
+                    if self.max_samples and len(self.samples) >= self.max_samples:
+                        return
+
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int]:
+        rel_path, label = self.samples[idx]
+        bbox = self._bbox_info[idx] if idx < len(self._bbox_info) else None
+
+        if bbox is not None:
+            # Mode A: load full scene and crop to sign region
+            jpg_path, x1, y1, x2, y2 = bbox
+            image = Image.open(jpg_path).convert("RGB")
+            iw, ih = image.size
+            x1 = max(0, min(x1, iw - 1))
+            y1 = max(0, min(y1, ih - 1))
+            x2 = max(x1 + 1, min(x2, iw))
+            y2 = max(y1 + 1, min(y2, ih))
+            image = image.crop((x1, y1, x2, y2))
+        else:
+            # Mode B: pre-extracted crop, load directly
+            image = Image.open(self.root / rel_path).convert("RGB")
+
+        if self.transform is not None:
+            image = self.transform(image)
+        return image, label
 
 
 # ---------------------------------------------------------------------------

@@ -56,98 +56,143 @@ def build_model(name: str, num_classes: int) -> nn.Module:
 
 def build_dot_loaders(batch_size: int = 8, num_workers: int = 0):
     """
-    Build DataLoaders from the DOT reference dataset.
+    Build DataLoaders for supervised training + optional domain adaptation.
 
-    Returns dict with keys: train, val, test, ood
+    Supervised datasets (DOT, GTSRB) contribute to the CE loss.
+    LISA and BDD100K provide ``DOMAIN_LABEL=-1`` crops for domain
+    adversarial training; they are returned under the ``"domain"`` key
+    and are excluded from the classification loss.
+
+    Returns dict with keys: ``train``, ``val``, ``test``, ``ood``,
+    and optionally ``domain`` (if LISA / BDD100K data found).
     """
-    from data.datasets import DOTDataset, GTSRBDataset, LISADataset, UnifiedTrafficSignDataset
-    from data.transforms import gtsrb_train_transform, eval_transform
+    import zipfile as _zipfile
+    from data.datasets import (
+        DOTDataset, GTSRBDataset, LISADataset, BDD100KDataset,
+        UnifiedTrafficSignDataset, DOMAIN_LABEL,
+    )
+    from data.transforms import gtsrb_train_transform, bdd100k_train_transform, eval_transform
     from data.dataloaders import stratified_split
 
-    train_datasets = []
-    eval_datasets = []
+    supervised_train: list = []
+    supervised_eval:  list = []
+    domain_datasets:  list = []
 
-    # ── DOT (always loaded as canonical reference) ──
+    # ── DOT (canonical reference, always loaded) ──
     dot_root = DATA_DIR / "DOT"
     if dot_root.exists():
         dot_train = DOTDataset(dot_root, transform=gtsrb_train_transform())
-        dot_eval = DOTDataset(dot_root, transform=eval_transform())
+        dot_eval  = DOTDataset(dot_root, transform=eval_transform())
         if len(dot_eval) > 0:
-            train_datasets.append(dot_train)
-            eval_datasets.append(dot_eval)
-            print(f"📂 DOT:   {len(dot_eval):6d} images")
+            supervised_train.append(dot_train)
+            supervised_eval.append(dot_eval)
+            print(f"  DOT:     {len(dot_eval):6d} images")
     else:
-        print(f"⚠️  DOT dataset not found at {dot_root}")
+        print(f"  WARNING: DOT not found at {dot_root}")
 
-    # ── GTSRB (torchvision auto-download) ──
-    gtsrb_root = DATA_DIR / "gtsrb-german-traffic-sign"
+    # ── GTSRB (Kaggle CSV format) ──
+    gtsrb_root = DATA_DIR / "gtsrb"
     if not gtsrb_root.exists():
-        gtsrb_root = DATA_DIR / "GSTRB"  # alternate spelling
+        gtsrb_root = DATA_DIR / "gtsrb-german-traffic-sign"  # legacy fallback
+    if gtsrb_root.exists():
+        gtsrb_train = GTSRBDataset(
+            gtsrb_root, transform=gtsrb_train_transform(),
+            split="train", download=False, dot_only=True,
+        )
+        gtsrb_eval = GTSRBDataset(
+            gtsrb_root, transform=eval_transform(),
+            split="test", download=False, dot_only=True,
+        )
+        if len(gtsrb_train) > 0:
+            supervised_train.append(gtsrb_train)
+        if len(gtsrb_eval) > 0:
+            supervised_eval.append(gtsrb_eval)
+        print(f"  GTSRB:   {len(gtsrb_train):6d} train, {len(gtsrb_eval):6d} eval (DOT-mapped)")
+    else:
+        print(f"  WARNING: GTSRB not found at {gtsrb_root}")
 
-    gtsrb_train = GTSRBDataset(gtsrb_root, transform=gtsrb_train_transform(),
-                               split="train", download=True)
-    if len(gtsrb_train) > 0:
-        gtsrb_test = GTSRBDataset(gtsrb_root, transform=eval_transform(),
-                                   split="test", download=True)
-        train_datasets.append(gtsrb_train)
-        if len(gtsrb_test) > 0:
-            eval_datasets.append(gtsrb_test)
-        print(f"📂 GTSRB: {len(gtsrb_train):6d} train, {len(gtsrb_test):6d} test")
+    # ── LISA (extract from zip on first use; domain adaptation only) ──
+    lisa_base = DATA_DIR / "lisa"
+    lisa_extracted = lisa_base / "extracted"
+    lisa_zip = lisa_base / "lisa-traffic-light-dataset.zip"
+    if not lisa_extracted.exists() and lisa_zip.exists():
+        print("  Extracting LISA zip (one-time) ...")
+        lisa_extracted.mkdir(parents=True, exist_ok=True)
+        with _zipfile.ZipFile(lisa_zip) as z:
+            z.extractall(lisa_extracted)
+        print(f"  LISA extracted to {lisa_extracted}")
+    lisa_dir = (
+        lisa_extracted if lisa_extracted.exists()
+        else lisa_base if (lisa_base / "Annotations").exists()
+        else None
+    )
+    if lisa_dir is not None:
+        lisa_domain = LISADataset(
+            lisa_dir,
+            transform=bdd100k_train_transform(),
+            domain_only=True,
+        )
+        if len(lisa_domain) > 0:
+            domain_datasets.append(lisa_domain)
+            print(f"  LISA:    {len(lisa_domain):6d} crops (domain-only)")
 
-    # ── LISA (bbox crop from video frames) ──
-    lisa_root = DATA_DIR / "LISA"
-    if lisa_root.exists():
-        lisa_train = LISADataset(lisa_root, transform=gtsrb_train_transform())
-        lisa_eval = LISADataset(lisa_root, transform=eval_transform())
-        if len(lisa_train) > 0:
-            train_datasets.append(lisa_train)
-            eval_datasets.append(lisa_eval)
-            print(f"📂 LISA:  {len(lisa_train):6d} images (bbox crops)")
+    # ── BDD100K (on-the-fly crop extraction; domain adaptation only) ──
+    bdd100k_root = DATA_DIR / "BDD_100K"
+    if bdd100k_root.exists():
+        print("  Scanning BDD100K annotations (may take a few seconds) ...")
+        bdd_domain = BDD100KDataset(
+            bdd100k_root,
+            transform=bdd100k_train_transform(),
+            split="train",
+            domain_only=True,
+            min_crop_size=16,
+        )
+        if len(bdd_domain) > 0:
+            domain_datasets.append(bdd_domain)
+            print(f"  BDD100K: {len(bdd_domain):6d} sign crops (domain-only)")
+        else:
+            print("  BDD100K: no crops found (missing 100k/ directory or annotations)")
 
-    if not train_datasets:
-        print("❌ No datasets found! Place data in ./dataset/")
+    if not supervised_train:
+        print("ERROR: No supervised datasets found. Check DATA_DIR in .env")
         sys.exit(1)
 
-    # Combine all training datasets
-    if len(train_datasets) == 1:
-        combined_train = train_datasets[0]
-    else:
-        combined_train = UnifiedTrafficSignDataset(train_datasets)
+    combined_train = (
+        supervised_train[0] if len(supervised_train) == 1
+        else UnifiedTrafficSignDataset(supervised_train)
+    )
+    combined_eval = (
+        supervised_eval[0] if len(supervised_eval) == 1
+        else UnifiedTrafficSignDataset(supervised_eval)
+    )
 
-    if len(eval_datasets) == 1:
-        combined_eval = eval_datasets[0]
-    else:
-        combined_eval = UnifiedTrafficSignDataset(eval_datasets)
+    print(f"\n  Supervised: {len(combined_train)} train samples, {len(combined_eval)} eval samples")
 
-    total_train = len(combined_train)
-    total_eval = len(combined_eval)
-    print(f"\n📊 Combined: {total_train} train, {total_eval} eval")
-
-    # Split eval dataset into val/test/ood
+    # Split eval into val / test / ood (40% / 30% / 30%)
     splits = stratified_split(combined_eval, ratios=(0.0, 0.4, 0.3, 0.3))
     _, val_sub, test_sub, ood_sub = splits
 
-    loaders = {
-        "train": DataLoader(
-            combined_train, batch_size=batch_size, shuffle=True,
-            num_workers=num_workers, drop_last=False,
-        ),
-        "val": DataLoader(
-            val_sub, batch_size=batch_size, shuffle=False,
-            num_workers=num_workers,
-        ),
-        "test": DataLoader(
-            test_sub, batch_size=batch_size, shuffle=False,
-            num_workers=num_workers,
-        ),
-        "ood": DataLoader(
-            ood_sub, batch_size=batch_size, shuffle=False,
-            num_workers=num_workers,
-        ),
+    loader_kw = dict(batch_size=batch_size, num_workers=num_workers)
+    loaders: dict = {
+        "train": DataLoader(combined_train, shuffle=True,  drop_last=False, **loader_kw),
+        "val":   DataLoader(val_sub,        shuffle=False, **loader_kw),
+        "test":  DataLoader(test_sub,       shuffle=False, **loader_kw),
+        "ood":   DataLoader(ood_sub,        shuffle=False, **loader_kw),
     }
 
+    if domain_datasets:
+        combined_domain = (
+            domain_datasets[0] if len(domain_datasets) == 1
+            else UnifiedTrafficSignDataset(domain_datasets)
+        )
+        loaders["domain"] = DataLoader(
+            combined_domain, shuffle=True, **loader_kw,
+        )
+        print(f"  Domain:   {len(combined_domain)} total crops (LISA + BDD100K)")
+
+    print()
     for name, loader in loaders.items():
-        print(f"   {name:5s}: {len(loader.dataset):6d} samples")
+        print(f"    {name:6s}: {len(loader.dataset):6d} samples")
 
     return loaders
 

@@ -39,15 +39,18 @@ def stratified_split(
 
     subsets: List[Subset] = []
     start = 0
+    last_start = 0
     for r in ratios:
+        last_start = start
         end = start + int(round(n * r))
         end = min(end, n)
         subsets.append(Subset(dataset, indices[start:end]))
         start = end
 
-    # Assign remaining to last subset (rounding residual)
+    # Assign any remaining elements (rounding residual) to the last subset.
+    # Uses the tracked last_start to avoid fragile arithmetic recalculation.
     if start < n:
-        subsets[-1] = Subset(dataset, indices[start - int(round(n * ratios[-1])):n])
+        subsets[-1] = Subset(dataset, indices[last_start:n])
 
     return subsets
 
