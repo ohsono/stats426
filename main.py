@@ -348,20 +348,20 @@ def cmd_evaluate(args):
     n_cls = num_classes()
     model = build_model(args.model, n_cls)
 
-    if args.checkpoint:
-        ckpt_path = Path(args.checkpoint)
-        if not ckpt_path.exists():
-            print(f"❌ Checkpoint not found: {ckpt_path}")
-            sys.exit(1)
-        state = torch.load(ckpt_path, map_location=device, weights_only=False)
-        if "model_state_dict" in state:
-            model.load_state_dict(state["model_state_dict"])
-            print(f"📦 Loaded checkpoint: {ckpt_path} (epoch {state.get('epoch', '?')})")
-        else:
-            model.load_state_dict(state)
-            print(f"📦 Loaded weights: {ckpt_path}")
+    # Auto-find checkpoint if not specified
+    ckpt_path = Path(args.checkpoint) if args.checkpoint else CHECKPOINT_DIR / args.model / "best_model.pth"
+    if not ckpt_path.exists():
+        print(f"❌ Checkpoint not found: {ckpt_path}")
+        print(f"   Train the model first: python main.py train --model {args.model}")
+        sys.exit(1)
+
+    state = torch.load(ckpt_path, map_location=device, weights_only=False)
+    if "model_state_dict" in state:
+        model.load_state_dict(state["model_state_dict"])
+        print(f"📦 Loaded checkpoint: {ckpt_path} (epoch {state.get('epoch', '?')})")
     else:
-        print("⚠️  No checkpoint specified — evaluating with random weights")
+        model.load_state_dict(state)
+        print(f"📦 Loaded weights: {ckpt_path}")
 
     model.to(device).eval()
 
