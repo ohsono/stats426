@@ -105,3 +105,16 @@ class AdvancedCNN(nn.Module):
         x = torch.flatten(x, 1)
         x = self.classifier(x)
         return x
+
+    def extract_features(self, x: torch.Tensor) -> torch.Tensor:
+        """Return 512-d features (after penultimate layer, before final linear)."""
+        x = self.stn(x)
+        x = self.features(x)
+        x = torch.flatten(x, 1)
+        for layer in list(self.classifier)[:-1]:
+            x = layer(x)
+        return x  # (B, 512)
+
+    def classify_features(self, features: torch.Tensor) -> torch.Tensor:
+        """Apply the final classification head to extracted features."""
+        return self.classifier[-1](features)

@@ -26,7 +26,8 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from models.baseline import BaselineCNN
-from training.engine import Trainer
+from models.resnet import ResNet10
+from training.engine import Trainer, DANNTrainer
 from training.curriculum import CurriculumScheduler, Stage
 from training.domain_adv import (
     GradientReversalLayer,
@@ -294,7 +295,132 @@ class TestDANNLoss:
 
 
 # ===================================================================
-# 4. LR Schedulers
+# 4. DANN Trainer
+# ===================================================================
+
+class TestDANNTrainer:
+
+    # --- helpers ---
+
+    @staticmethod
+    def _make_loader(n: int = 16, batch_size: int = 4):
+        images = torch.randn(n, 3, IMAGE_SIZE, IMAGE_SIZE)
+        labels = torch.randint(0, NUM_CLASSES, (n,))
+        return DataLoader(TensorDataset(images, labels), batch_size=batch_size)
+
+    @staticmethod
+    def _make_dann_trainer(model, feature_dim, tmpdir, **kwargs):
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+        criterion = torch.nn.CrossEntropyLoss()
+        domain_cls = DomainClassifier(feature_dim=feature_dim, num_domains=2)
+        optimizer.add_param_group({"params": domain_cls.parameters()})
+        return DANNTrainer(
+            model=model,
+            optimizer=optimizer,
+            criterion=criterion,
+            device=torch.device("cpu"),
+            use_amp=False,
+            checkpoint_dir=Path(tmpdir),
+            domain_classifier=domain_cls,
+            lambda_domain=0.1,
+            grl_alpha_max=1.0,
+            **kwargs,
+        )
+
+    # --- tests ---
+
+    def test_extract_features_resnet10(self):
+        model = ResNet10()
+        x = torch.randn(4, 3, IMAGE_SIZE, IMAGE_SIZE)
+        feats = model.extract_features(x)
+        assert feats.shape == (4, 512)
+
+    def test_extract_features_baseline(self):
+        model = BaselineCNN()
+        x = torch.randn(4, 3, IMAGE_SIZE, IMAGE_SIZE)
+        feats = model.extract_features(x)
+        assert feats.shape == (4, 256)
+
+    def test_classify_features_consistent_with_forward(self):
+        """extract_features + classify_features should match forward() output."""
+        model = BaselineCNN()
+        model.eval()
+        x = torch.randn(4, 3, IMAGE_SIZE, IMAGE_SIZE)
+        with torch.no_grad():
+            expected = model(x)
+            feats = model.extract_features(x)
+            got = model.classify_features(feats)
+        assert torch.allclose(expected, got, atol=1e-5)
+
+    def test_dann_train_one_epoch_returns_keys(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            model = BaselineCNN()
+            loader = self._make_loader()
+            domain_loader = self._make_loader(n=8)
+            trainer = self._make_dann_trainer(model, feature_dim=256, tmpdir=tmp)
+            metrics = trainer.train_one_epoch_dann(loader, domain_loader)
+            for key in ("train_loss", "train_acc", "dann_ce_loss", "dann_dom_loss", "grl_alpha"):
+                assert key in metrics, f"Missing key: {key}"
+            assert metrics["train_loss"] >= 0
+            assert 0.0 <= metrics["grl_alpha"] <= 1.0
+
+    def test_dann_fit_returns_history(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            model = BaselineCNN()
+            loader = self._make_loader()
+            domain_loader = self._make_loader(n=8)
+            trainer = self._make_dann_trainer(model, feature_dim=256, tmpdir=tmp)
+            history = trainer.fit(loader, loader, epochs=2, domain_loader=domain_loader)
+            assert len(history["train_loss"]) == 2
+            assert len(history["val_loss"]) == 2
+
+    def test_grl_alpha_schedule(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            model = BaselineCNN()
+            trainer = self._make_dann_trainer(model, feature_dim=256, tmpdir=tmp)
+            # At step 0, alpha should be ~0
+            trainer._dann_step = 0
+            trainer._total_dann_steps = 100
+            alpha_start = trainer._grl_alpha()
+            # At step 100 (end), alpha should be near grl_alpha_max
+            trainer._dann_step = 100
+            alpha_end = trainer._grl_alpha()
+            assert alpha_start < 0.5
+            assert alpha_end > 0.9 * trainer.grl_alpha_max
+
+    def test_dann_checkpoint_roundtrip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            model = BaselineCNN()
+            loader = self._make_loader()
+            domain_loader = self._make_loader(n=8)
+            trainer = self._make_dann_trainer(model, feature_dim=256, tmpdir=tmp)
+            trainer.fit(loader, loader, epochs=2, domain_loader=domain_loader)
+            trainer.save_checkpoint(epoch=2, filename="dann_ckpt.pth")
+
+            # Load into a fresh DANNTrainer
+            model2 = BaselineCNN()
+            trainer2 = self._make_dann_trainer(model2, feature_dim=256, tmpdir=tmp)
+            trainer2.load_checkpoint(Path(tmp) / "dann_ckpt.pth")
+
+            # domain_classifier weights should match
+            for (n1, p1), (n2, p2) in zip(
+                trainer.domain_classifier.named_parameters(),
+                trainer2.domain_classifier.named_parameters(),
+            ):
+                assert torch.allclose(p1, p2), f"Mismatch in {n1}"
+
+    def test_dann_fit_without_domain_loader_falls_back(self):
+        """fit() without domain_loader should fall back to supervised Trainer.fit()."""
+        with tempfile.TemporaryDirectory() as tmp:
+            model = BaselineCNN()
+            loader = self._make_loader()
+            trainer = self._make_dann_trainer(model, feature_dim=256, tmpdir=tmp)
+            history = trainer.fit(loader, loader, epochs=2, domain_loader=None)
+            assert len(history["train_loss"]) == 2
+
+
+# ===================================================================
+# 5. LR Schedulers
 # ===================================================================
 
 class TestSchedulers:

@@ -121,3 +121,17 @@ class ResNet10(nn.Module):
         x = torch.flatten(x, 1)
         x = self.fc(x)
         return x
+
+    def extract_features(self, x: torch.Tensor) -> torch.Tensor:
+        """Return 512-d pooled features (before fc)."""
+        x = self.stem(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        x = self.avgpool(x)
+        return torch.flatten(x, 1)  # (B, 512)
+
+    def classify_features(self, features: torch.Tensor) -> torch.Tensor:
+        """Apply the final classification head to extracted features."""
+        return self.fc(features)
