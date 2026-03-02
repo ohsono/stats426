@@ -302,15 +302,44 @@ class Trainer:
         torch.save(state, path)
 
     def load_checkpoint(self, path: Path):
-        """Load a checkpoint with device-agnostic map_location."""
+        """Load a checkpoint with device-agnostic map_location.
+
+        If the saved optimizer has a different number of param groups than the
+        current optimizer (e.g. transitioning between supervised and DANN), the
+        optimizer state is skipped and the optimizer starts fresh.  Model weights
+        are always restored.
+        """
         state = torch.load(path, map_location=self.device, weights_only=False)
         self.model.load_state_dict(state["model_state_dict"])
-        self.optimizer.load_state_dict(state["optimizer_state_dict"])
+        try:
+            self.optimizer.load_state_dict(state["optimizer_state_dict"])
+        except ValueError as exc:
+            if "different number of parameter groups" in str(exc):
+                _log.warning(
+                    "Checkpoint optimizer param groups (%d) != current (%d); "
+                    "skipping optimizer state — optimizer will start fresh.",
+                    len(state["optimizer_state_dict"]["param_groups"]),
+                    len(self.optimizer.param_groups),
+                )
+            else:
+                raise
         self._global_step = state.get("global_step", 0)
         self._best_value = state.get("best_value")
         self._best_epoch = state.get("best_epoch", 0)
         if self.scheduler and "scheduler_state_dict" in state:
-            self.scheduler.load_state_dict(state["scheduler_state_dict"])
+            saved_sched = state["scheduler_state_dict"]
+            saved_base_lrs = saved_sched.get("base_lrs", [])
+            if len(saved_base_lrs) == len(self.optimizer.param_groups):
+                try:
+                    self.scheduler.load_state_dict(saved_sched)
+                except Exception:
+                    pass
+            else:
+                _log.warning(
+                    "Skipping scheduler state restore: saved base_lrs length %d "
+                    "!= current optimizer param groups %d; scheduler will start fresh.",
+                    len(saved_base_lrs), len(self.optimizer.param_groups),
+                )
         return state.get("epoch", 0)
 
 
