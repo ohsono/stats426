@@ -44,3 +44,15 @@ class BaselineCNN(nn.Module):
         x = self.dropout(F.relu(self.fc1(x)))
         x = self.fc2(x)
         return x
+
+    def extract_features(self, x: torch.Tensor) -> torch.Tensor:
+        """Return 256-d features (after fc1 + dropout, before fc2)."""
+        x = self.pool(F.relu(self.conv1(x)))
+        x = self.pool(F.relu(self.conv2(x)))
+        x = self.pool(F.relu(self.conv3(x)))
+        x = torch.flatten(x, 1)
+        return self.dropout(F.relu(self.fc1(x)))  # (B, 256)
+
+    def classify_features(self, features: torch.Tensor) -> torch.Tensor:
+        """Apply the final classification head to extracted features."""
+        return self.fc2(features)

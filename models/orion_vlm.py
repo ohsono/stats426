@@ -82,3 +82,11 @@ class OrionVLMStub(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         features = self.encoder(x)
         return self.head(features)
+
+    def extract_features(self, x: torch.Tensor) -> torch.Tensor:
+        """Return 512-d encoder features (before classification head)."""
+        return self.encoder(x)  # (B, embed_dim)
+
+    def classify_features(self, features: torch.Tensor) -> torch.Tensor:
+        """Apply the LoRA classification head to extracted features."""
+        return self.head(features)

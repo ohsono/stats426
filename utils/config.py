@@ -86,6 +86,12 @@ class TrainConfig:
     curriculum_stages: List[str] = field(
         default_factory=lambda: ["geometric", "real_world", "domain_adv"]
     )
+    # DANN (Stage 3)
+    epochs_stage3: int = 20
+    enable_domain_adv: bool = False
+    lambda_domain: float = 0.1    # weight for domain loss
+    grl_alpha_max: float = 1.0    # final GRL alpha (linearly ramped)
+    num_domains: int = 2          # binary: source=0, target=1
 
 
 @dataclass

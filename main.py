@@ -234,7 +234,27 @@ def cmd_train(args):
         weight_decay=cfg.train.weight_decay,
     )
     criterion = nn.CrossEntropyLoss()
-    scheduler = build_scheduler(optimizer, name=cfg.train.scheduler, total_epochs=epochs)
+
+    # Resolve DANN hyperparameters early (needed before scheduler + checkpoint)
+    _dann = getattr(args, 'dann', False)
+    domain_cls = None
+    if _dann:
+        from training.domain_adv import DomainClassifier
+        from training.engine import DANNTrainer
+        lambda_domain = args.lambda_domain if args.lambda_domain is not None else cfg.train.lambda_domain
+        grl_alpha_max = args.grl_alpha_max if args.grl_alpha_max is not None else cfg.train.grl_alpha_max
+        dann_epochs   = args.epochs_stage3 if args.epochs_stage3 is not None else cfg.train.epochs_stage3
+        feature_dim_map = {"resnet10": 512, "baseline": 256, "advanced": 512, "orion": 512}
+        feature_dim = feature_dim_map.get(cfg.model_name, 512)
+        domain_cls = DomainClassifier(feature_dim=feature_dim, num_domains=cfg.train.num_domains)
+        # Add domain classifier params NOW so optimizer has the right param group
+        # count before the scheduler is built and before any checkpoint is loaded.
+        optimizer.add_param_group({"params": domain_cls.parameters()})
+        sched_epochs = dann_epochs
+    else:
+        sched_epochs = epochs
+
+    scheduler = build_scheduler(optimizer, name=cfg.train.scheduler, total_epochs=sched_epochs)
 
     # Build logger
     logger = ExperimentLogger(
@@ -248,43 +268,59 @@ def cmd_train(args):
     model_ckpt_dir = CHECKPOINT_DIR / cfg.model_name
     model_ckpt_dir.mkdir(parents=True, exist_ok=True)
 
-    # Build trainer
-    trainer = Trainer(
-        model=model,
-        optimizer=optimizer,
-        criterion=criterion,
-        device=device,
-        scheduler=scheduler,
-        logger=logger,
-        use_amp=cfg.train.use_amp,
-        checkpoint_dir=model_ckpt_dir,
-        save_best=True,
-        save_every_n_epochs=args.save_every,
-        early_stopping_patience=args.patience,
-    )
+    # Build trainer (Trainer for supervised, DANNTrainer for domain-adversarial)
+    if _dann:
+        active_trainer = DANNTrainer(
+            model=model,
+            optimizer=optimizer,
+            criterion=criterion,
+            device=device,
+            scheduler=scheduler,
+            logger=logger,
+            use_amp=cfg.train.use_amp,
+            checkpoint_dir=model_ckpt_dir,
+            save_best=True,
+            save_every_n_epochs=args.save_every,
+            early_stopping_patience=args.patience,
+            domain_classifier=domain_cls,
+            lambda_domain=lambda_domain,
+            grl_alpha_max=grl_alpha_max,
+        )
+    else:
+        active_trainer = Trainer(
+            model=model,
+            optimizer=optimizer,
+            criterion=criterion,
+            device=device,
+            scheduler=scheduler,
+            logger=logger,
+            use_amp=cfg.train.use_amp,
+            checkpoint_dir=model_ckpt_dir,
+            save_best=True,
+            save_every_n_epochs=args.save_every,
+            early_stopping_patience=args.patience,
+        )
 
     # Resume from checkpoint if --continue is set
     start_epoch = 1
     if getattr(args, 'continue_training', False):
-        # Find best checkpoint for this model
         ckpt_candidates = [
             model_ckpt_dir / "checkpoint_last.pth",
             model_ckpt_dir / "best_model.pth",
         ]
-        # Also check for periodic checkpoints (e.g., checkpoint_epoch_10.pth)
         periodic = sorted(model_ckpt_dir.glob("checkpoint_epoch_*.pth"),
                           key=lambda p: int(p.stem.split("_")[-1]) if p.stem.split("_")[-1].isdigit() else 0,
                           reverse=True)
-        ckpt_candidates = periodic + ckpt_candidates  # newest periodic first
+        ckpt_candidates = periodic + ckpt_candidates
 
         resumed = False
         for ckpt_path in ckpt_candidates:
             if ckpt_path.exists():
                 try:
-                    loaded_epoch = trainer.load_checkpoint(ckpt_path)
+                    loaded_epoch = active_trainer.load_checkpoint(ckpt_path)
                     start_epoch = loaded_epoch + 1
                     print(f"\n🔄 Resuming from {ckpt_path.name} (epoch {loaded_epoch})")
-                    print(f"   Previous best {trainer.best_metric}: {trainer.best_value:.6f} @ epoch {trainer.best_epoch}")
+                    print(f"   Previous best {active_trainer.best_metric}: {active_trainer.best_value:.6f} @ epoch {active_trainer.best_epoch}")
                     resumed = True
                     break
                 except RuntimeError as e:
@@ -301,15 +337,15 @@ def cmd_train(args):
 
     # When continuing, --epochs means "N more epochs", not total target
     if start_epoch > 1:
-        remaining_epochs = epochs  # train N more epochs from where we left off
+        remaining_epochs = epochs
         target_epoch = start_epoch + remaining_epochs - 1
     else:
         remaining_epochs = epochs
         target_epoch = epochs
 
-    print(f"\n🚀 Training {cfg.model_name} for {remaining_epochs} epochs on {device}")
+    print(f"\n🚀 Training {cfg.model_name} for {remaining_epochs if not _dann else dann_epochs} epochs on {device}")
     if start_epoch > 1:
-        print(f"   Continuing from epoch {start_epoch} → {target_epoch}")
+        print(f"   Continuing from epoch {start_epoch}")
     print(f"   Stage: {args.stage}")
     print(f"   LR: {args.lr or cfg.train.lr}, Batch: {args.batch_size}")
     print(f"   Checkpoints: {model_ckpt_dir}")
@@ -318,16 +354,28 @@ def cmd_train(args):
     print()
 
     # Train
-    history = trainer.fit(loaders["train"], loaders["val"],
-                          epochs=remaining_epochs, start_epoch=start_epoch)
+    if _dann:
+        if "domain" not in loaders:
+            print("WARNING: No domain data found (LISA/BDD100K). DANN running without adversarial batches.")
+        print(f"🌐 DANN Phase 3: lambda_domain={lambda_domain}, grl_alpha_max={grl_alpha_max}")
+        print(f"   Feature dim: {feature_dim}, Domain classifier: {cfg.train.num_domains}-way")
+        history = active_trainer.fit(
+            loaders["train"], loaders["val"],
+            epochs=dann_epochs,
+            start_epoch=start_epoch,
+            domain_loader=loaders.get("domain"),
+        )
+    else:
+        history = active_trainer.fit(loaders["train"], loaders["val"],
+                                     epochs=remaining_epochs, start_epoch=start_epoch)
 
     # Summary
     print(f"\n{'─' * 50}")
     print(f"✅ Training complete!")
-    print(f"   Best {trainer.best_metric}: {trainer.best_value:.6f} @ epoch {trainer.best_epoch}")
+    print(f"   Best {active_trainer.best_metric}: {active_trainer.best_value:.6f} @ epoch {active_trainer.best_epoch}")
     print(f"   Final train_loss: {history['train_loss'][-1]:.4f}")
     print(f"   Final val_loss:   {history['val_loss'][-1]:.4f}")
-    if trainer.stopped_early:
+    if active_trainer.stopped_early:
         print(f"   ⏹ Stopped early at epoch {len(history['train_loss'])}")
     print(f"   Checkpoints saved to: {model_ckpt_dir}")
     if args.verbose and logger.log_file_path:
@@ -348,20 +396,20 @@ def cmd_evaluate(args):
     n_cls = num_classes()
     model = build_model(args.model, n_cls)
 
-    if args.checkpoint:
-        ckpt_path = Path(args.checkpoint)
-        if not ckpt_path.exists():
-            print(f"❌ Checkpoint not found: {ckpt_path}")
-            sys.exit(1)
-        state = torch.load(ckpt_path, map_location=device, weights_only=False)
-        if "model_state_dict" in state:
-            model.load_state_dict(state["model_state_dict"])
-            print(f"📦 Loaded checkpoint: {ckpt_path} (epoch {state.get('epoch', '?')})")
-        else:
-            model.load_state_dict(state)
-            print(f"📦 Loaded weights: {ckpt_path}")
+    # Auto-find checkpoint if not specified
+    ckpt_path = Path(args.checkpoint) if args.checkpoint else CHECKPOINT_DIR / args.model / "best_model.pth"
+    if not ckpt_path.exists():
+        print(f"❌ Checkpoint not found: {ckpt_path}")
+        print(f"   Train the model first: python main.py train --model {args.model}")
+        sys.exit(1)
+
+    state = torch.load(ckpt_path, map_location=device, weights_only=False)
+    if "model_state_dict" in state:
+        model.load_state_dict(state["model_state_dict"])
+        print(f"📦 Loaded checkpoint: {ckpt_path} (epoch {state.get('epoch', '?')})")
     else:
-        print("⚠️  No checkpoint specified — evaluating with random weights")
+        model.load_state_dict(state)
+        print(f"📦 Loaded weights: {ckpt_path}")
 
     model.to(device).eval()
 
@@ -493,6 +541,14 @@ def main():
     p_train.add_argument("--continue", dest="continue_training",
                          action="store_true",
                          help="Resume training from last/best checkpoint")
+    p_train.add_argument("--dann", action="store_true",
+                         help="Enable Phase 3 domain-adversarial (DANN) training")
+    p_train.add_argument("--lambda-domain", type=float, default=None,
+                         help="Domain loss weight for DANN (default: 0.1)")
+    p_train.add_argument("--epochs-stage3", type=int, default=None,
+                         help="Number of DANN training epochs (default: 20)")
+    p_train.add_argument("--grl-alpha-max", type=float, default=None,
+                         help="Maximum GRL alpha for DANN schedule (default: 1.0)")
 
     # evaluate
     p_eval = sub.add_parser("evaluate", help="Evaluate a model")
