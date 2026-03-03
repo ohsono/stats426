@@ -2,6 +2,12 @@
 .claude/
 CLAUDE.md
 
+# vscode
+.DS_Store
+
+# local env file
+.env
+
 # Mac OS files
 ._*
 
