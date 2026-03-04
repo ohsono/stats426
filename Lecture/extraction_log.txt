@@ -4,3 +4,6 @@ Extracted text from Lecture-6.pdf to Lecture-6_extracted.txt
 Extracted text from Lecture-7.pdf to Lecture-7_extracted.txt
 Extracted text from Lecture-8.pdf to Lecture-8_extracted.txt
 Extracted text from Lecture-9.pdf to Lecture-9_extracted.txt
+Extracted text from ./Lecture-7.pdf to ./Lecture-7_extracted.pdf
+Extracted text from ./Lecture-8.pdf to ./Lecture-8_extracted.pdf
+Extracted text from ./Lecture-9.pdf to ./Lecture-9_extracted.pdf
