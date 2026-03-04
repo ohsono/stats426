@@ -1,6 +1,6 @@
 # Claude
 .claude/
-CLAUDE.md
+!CLAUDE.md
 
 # vscode
 .DS_Store
@@ -10,6 +10,11 @@ CLAUDE.md
 
 # Mac OS files
 ._*
+
+# vscode files
+.vscode/
+.env
+.DS_Store
 
 # LaTex files
 *.gz
@@ -24,3 +29,15 @@ CLAUDE.md
 
 # dataset
 dataset/
+
+# Python cache
+__pycache__
+
+# checkpoints
+checkpoints/
+
+# logs
+logs/
+
+# demo file
+proposal/Traffic_Sign_Classification_PyTorch_Full (1).ipynb
