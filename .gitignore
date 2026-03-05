@@ -2,42 +2,36 @@
 .claude/
 !CLAUDE.md
 
-# vscode
-.DS_Store
-
-# local env file
+# Local environment
 .env
 
-# Mac OS files
+# macOS
+.DS_Store
 ._*
 
-# vscode files
+# VS Code
 .vscode/
-.env
-.DS_Store
 
-# LaTex files
+# LaTeX artifacts
 *.gz
 *.out
 *.aux
 *.log
+*.fls
+*.fdb_latexmk
 
-# RStudio files
+# RStudio
 .RData
 .Rhistory
 .Rproj.user
 
-# dataset
-dataset/
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
 
-# Python cache
-__pycache__
-
-# checkpoints
-checkpoints/
-
-# logs
-logs/
-
-# demo file
-proposal/Traffic_Sign_Classification_PyTorch_Full (1).ipynb
+# Project runtime artifacts (in project/)
+project/dataset/
+project/checkpoints/
+project/logs/

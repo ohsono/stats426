@@ -17,44 +17,55 @@ A PyTorch-based traffic sign classification system that trains and evaluates CNN
 
 ---
 
-## Project Structure
+## Repository Structure
 
 ```
 stats426/
-├── main.py                    # CLI entry point (info / train / evaluate)
-├── requirements.txt
-├── setup_env.sh               # Conda/pyenv environment bootstrap
-├── .env.example               # DATA_DIR, CHECKPOINT_DIR, LOG_DIR
+├── project/                       # Main source code
+│   ├── main.py                    # CLI entry point (info / train / evaluate)
+│   ├── requirements.txt
+│   ├── setup_env.sh               # Conda/pyenv environment bootstrap
+│   ├── .gitignore
+│   │
+│   ├── data/
+│   │   ├── datasets.py            # DOTDataset, GTSRBDataset, LISADataset, BDD100KDataset
+│   │   ├── dataloaders.py         # stratified_split (70/10/10/10) + DataLoader factory
+│   │   ├── transforms.py          # Per-dataset augmentation pipelines
+│   │   ├── unify.py               # DOT label space + cross-dataset label maps
+│   │   └── preprocess_bdd100k.py  # Offline BDD100K crop extractor
+│   │
+│   ├── models/
+│   │   ├── baseline.py            # BaselineCNN (3 conv layers)
+│   │   ├── advanced.py            # AdvancedCNN (CNN + SpatialTransformerNetwork)
+│   │   ├── resnet.py              # ResNet10 (modified 3×3 stride-1 stem)
+│   │   └── orion_vlm.py           # OrionVLMStub (LoRA VQA stub)
+│   │
+│   ├── training/
+│   │   ├── engine.py              # Trainer: train/val loop, AMP, checkpointing, early stopping
+│   │   ├── curriculum.py          # CurriculumScheduler: staged dataset introduction
+│   │   └── domain_adv.py          # Gradient Reversal Layer + DomainClassifier (DANN)
+│   │
+│   ├── evaluation/
+│   │   ├── metrics.py             # Precision/Recall/F1, critical class recall (safety signs)
+│   │   ├── calibration.py         # ECE, reliability diagrams
+│   │   └── ood_testing.py         # OOD degradation analysis
+│   │
+│   ├── utils/
+│   │   ├── device.py              # Auto-selects cuda > mps > cpu
+│   │   ├── config.py              # Dataclass config (Config, DataConfig, TrainConfig, EvalConfig)
+│   │   └── logger.py              # TensorBoard integration
+│   │
+│   └── tests/                     # pytest suite
 │
-├── data/
-│   ├── datasets.py            # DOTDataset, GTSRBDataset, LISADataset, BDD100KDataset
-│   ├── dataloaders.py         # stratified_split (70/10/10/10) + DataLoader factory
-│   ├── transforms.py          # Per-dataset augmentation pipelines
-│   ├── unify.py               # DOT label space + cross-dataset label maps
-│   └── preprocess_bdd100k.py  # Offline BDD100K crop extractor
+├── docs/                          # Course materials and documentation
+│   ├── course/
+│   │   ├── HW/                    # Homework assignments (HW1–HW4)
+│   │   ├── Lecture/               # Lecture notes and summaries
+│   │   └── Quiz/                  # Quiz materials and answer keys
+│   └── proposal/                  # Project proposal documents
 │
-├── models/
-│   ├── baseline.py            # BaselineCNN (3 conv layers)
-│   ├── advanced.py            # AdvancedCNN (CNN + SpatialTransformerNetwork)
-│   ├── resnet10.py            # ResNet10 (modified 3×3 stride-1 stem)
-│   └── orion.py               # OrionVLMStub (LoRA VQA stub)
-│
-├── training/
-│   ├── engine.py              # Trainer: train/val loop, AMP, checkpointing, early stopping
-│   ├── curriculum.py          # CurriculumScheduler: staged dataset introduction
-│   └── domain_adv.py          # Gradient Reversal Layer + DomainClassifier (DANN)
-│
-├── evaluation/
-│   ├── metrics.py             # Precision/Recall/F1, critical class recall (safety signs)
-│   ├── calibration.py         # ECE, reliability diagrams
-│   └── ood_testing.py         # OOD degradation analysis
-│
-├── utils/
-│   ├── device.py              # Auto-selects cuda > mps > cpu
-│   ├── config.py              # Dataclass config (Config, DataConfig, TrainConfig, EvalConfig)
-│   └── logger.py              # TensorBoard integration
-│
-└── tests/                     # pytest suite (31 tests)
+├── .env                           # Local environment config (not committed)
+└── .env.example                   # Config template
 ```
 
 ---
@@ -85,6 +96,7 @@ stats426/
 
 To pre-extract BDD100K crops:
 ```bash
+cd project
 python data/preprocess_bdd100k.py \
     --bdd100k-dir /path/to/BDD_100K \
     --output-dir  /path/to/BDD_100K/preextracted \
@@ -111,20 +123,21 @@ All models output raw logits for 58 classes (`CrossEntropyLoss`).
 ### 1. Environment
 
 ```bash
+cd project
 source setup_env.sh      # auto-detects conda or pyenv
 pip install -r requirements.txt
 ```
 
 ### 2. Configuration
 
-Copy `.env.example` to `.env` and set dataset paths:
+Copy `.env.example` to `.env` (at the repo root) and set dataset paths:
 
 ```bash
 cp .env.example .env
 # Edit .env:
 DATA_DIR=/path/to/your/datasets
-CHECKPOINT_DIR=./checkpoints
-LOG_DIR=./logs
+CHECKPOINT_DIR=./project/checkpoints
+LOG_DIR=./project/logs
 ```
 
 ### 3. Dataset layout expected
@@ -149,6 +162,8 @@ $DATA_DIR/
 ## Quick Start
 
 ```bash
+cd project
+
 # Check detected device and dataset info
 python main.py info
 
@@ -204,7 +219,7 @@ Prints device info, dataset paths, and detected hardware.
 
 ## Configuration
 
-All hyperparameters live in `utils/config.py` dataclasses:
+All hyperparameters live in `project/utils/config.py` dataclasses:
 
 ```python
 @dataclass
@@ -255,14 +270,16 @@ class DataConfig:
 - Install: `pip install torch==2.10.0+cu130 torchvision==0.25.0+cu130 --index-url https://download.pytorch.org/whl/cu130`
 - AMP (Automatic Mixed Precision) is enabled automatically on CUDA; disabled on MPS/CPU
 - MPS fallback: `PYTORCH_ENABLE_MPS_FALLBACK=1` is set in `main.py` for ops missing on Metal (e.g., `grid_sampler_2d_backward` in STN)
-- If GPU OOM occurs (e.g., VLLM pre-allocated memory), reduce `--batch-size` or kill competing processes before running training
+- If GPU OOM occurs, reduce `--batch-size` or kill competing processes before running training
 
 ---
 
 ## Testing
 
 ```bash
-# Full suite (31 tests)
+cd project
+
+# Full suite
 python -m pytest tests/ -v
 
 # Single test file
