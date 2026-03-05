@@ -20,6 +20,9 @@
 *.fls
 *.fdb_latexmk
 
+# Checkpoint files
+*.pth
+
 # RStudio
 .RData
 .Rhistory
