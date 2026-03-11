@@ -36,6 +36,54 @@ f̂ = argmin (1/n) Σᵢ L(f(xᵢ), yᵢ)
      f∈H
 ```
 
+#### Term-by-Term Breakdown
+
+| Symbol | Name | Meaning |
+|---|---|---|
+| `f̂` | Learned function | The model you end up with after training |
+| `argmin f∈H` | Argmin over H | "Find the f, restricted to class H, that minimizes..." |
+| `H` | Hypothesis class | The set of all models you're willing to consider |
+| `(1/n)` | Averaging | Normalize so loss doesn't grow with dataset size |
+| `Σᵢ L(f(xᵢ), yᵢ)` | Sum of losses | Total mistake over all n training samples |
+
+> **Plain English:** *"Among all functions in our allowed model family H, find the one that makes the smallest average mistake on the training data."*
+
+#### How `argmin` Works
+
+`argmin` stands for **"argument of the minimum"** — it returns the **input** that produces the smallest output, not the minimum value itself.
+
+```
+Example: g(x) = x² - 4x + 5
+
+min  g(x) = 1        ← returns the minimum VALUE
+argmin g(x) = 2      ← returns the x that ACHIEVES that minimum
+```
+
+In the ERM context: the "input" being searched is `f` (the model weights), and the output is the average training loss. `argmin` returns `f̂` — the **specific model** achieving the lowest training loss.
+
+In practice, you can't check every `f` exhaustively, so **gradient descent** is used to iteratively walk toward the minimum:
+```
+Start with random weights → compute loss → step downhill → repeat → f̂
+```
+
+#### What the Hypothesis Class H Controls
+
+`H` constrains what shapes your model can take. Larger H = more expressive = more complex:
+
+```
+Small H:  linear models only  → can only draw straight lines
+Medium H: polynomial models   → can draw curves
+Large H:  deep neural nets    → can draw almost any shape
+```
+
+| H Size | Bias | Variance | Risk |
+|---|---|---|---|
+| Smaller H | ⬆️ High (underfitting) | ⬇️ Low | Misses patterns |
+| Larger H | ⬇️ Low | ⬆️ High (overfitting) | Memorizes noise |
+
+> **Important:** Larger H means more **model expressiveness**, NOT more data. More data helps you *safely use* a larger H without overfitting.
+
+
 ### Recap: Linear Regression
 
 **Data:**
@@ -110,22 +158,59 @@ L(w, b) = (1/n) Σᵢ (1/2)(wᵀxᵢ + b - yᵢ)²
 πᵢ(xᵢ, β) = P(yᵢ = 1 | xᵢ, β) = 1 / (1 + exp(-xᵢᵀβ))
 ```
 
-**Likelihood Function:**
+---
+
+#### Likelihood → Log-Likelihood → Negative Log-Likelihood
+
+**Step 1 — Likelihood L(β):**
+
+How probable is the observed data given parameters β? Since data points are independent (i.i.d.), we multiply their individual probabilities:
+
 ```
 L(β) = Πᵢ [πᵢ]^yᵢ [1 - πᵢ]^(1-yᵢ)
 ```
 
-**Log-Likelihood Function:**
+❌ **Problem:** Products of many probabilities (all in [0,1]) become astronomically small → numerical underflow on a computer.
+
+**Step 2 — Log-Likelihood ℓ(β):**
+
+Take the natural log — the product becomes a sum:
+
 ```
 ℓ(β) = Σᵢ [yᵢ log πᵢ + (1 - yᵢ) log(1 - πᵢ)]
 ```
+
+✅ Numerically stable · ✅ Easier to differentiate · ✅ Same maximizer (log is monotonic)
+
+**Step 3 — Negative Log-Likelihood (NLL):**
+
+Flip the sign to convert maximization → minimization (to use gradient descent):
+
+```
+NLL(β) = -ℓ(β) = -Σᵢ [yᵢ log πᵢ + (1 - yᵢ) log(1 - πᵢ)]
+```
+
+| | Likelihood | Log-Likelihood | Neg. Log-Likelihood |
+|---|---|---|---|
+| **Formula** | `Π P(yᵢ\|xᵢ, θ)` | `Σ log P(yᵢ\|xᵢ, θ)` | `-Σ log P(yᵢ\|xᵢ, θ)` |
+| **Operation** | Product | Sum | Negative sum |
+| **Goal** | Maximize | Maximize | **Minimize** |
+| **Numerics** | ❌ Underflow | ✅ Stable | ✅ Stable |
+| **Used in** | Theory | Theory / stats | **ML training loss** |
+
+> **Key insight:** They are all the same objective — just transformed for practical use. Maximizing likelihood = Maximizing log-likelihood = **Minimizing NLL**.
+
+---
 
 **Loss Function: Negative Log-Likelihood (Cross-Entropy)**
 ```
 L(y, π(x)) = -[y log π(x) + (1 - y) log(1 - π(x))]
 ```
 
+> The NLL for binary classification **is** the binary cross-entropy loss — they are the same thing.
+
 **Solution (No Closed Form):** Unlike linear regression, taking the gradient and setting it to zero does not yield a closed-form solution. We must use iterative methods such as Newton-Raphson or Gradient Descent.
+
 
 ### Logistic Regression from Neural Network Perspective
 
@@ -177,7 +262,19 @@ L(y, ŷ) = -Σₖ yₖ log ŷₖ
 - They imply a monotonic relationship: increasing xᵢ must always increase (or always decrease) the output
 - They cannot solve the **XOR Problem** or handle complex interactions between features
 
+**MLPs also lack Translation Invariance:**
+
+MLPs assign a **fixed weight to every input position**. The same pattern shifted by one position activates entirely different weights — the model must relearn the same feature at every possible location.
+
+```
+Cat at position A → activates weights w₁, w₂, w₃
+Cat at position B → activates weights w₄, w₅, w₆  ← treated as DIFFERENT
+```
+
+This is why CNNs (using shared filters + pooling) are preferred for image and sequential data — they build in translation invariance so the same feature is detected **anywhere** in the input.
+
 **To model complex data, we need Hidden Layers and Non-linearities.**
+
 
 ### Incorporating Hidden Layers
 
@@ -213,19 +310,72 @@ o = W⁽²⁾h + b⁽²⁾
 
 ### Why Activation Functions?
 
-**Without non-linearity σ, the hidden layer is mathematically useless:**
-```
-h = W⁽¹⁾x + b⁽¹⁾
-o = W⁽²⁾h + b⁽²⁾
+#### What is an Affine Function?
 
-Substituting:
+An **affine function** is simply: a linear transformation + a bias shift:
+```
+output = W·input + b
+```
+A single neural network layer with no activation is *just* an affine function — pure matrix multiplication with a bias.
+
+#### The Collapse Problem
+
+**Without non-linearity σ, the hidden layer is mathematically useless:**
+
+```
+Layer 1:  h = W⁽¹⁾x + b⁽¹⁾
+Layer 2:  o = W⁽²⁾h + b⁽²⁾
+
+Substituting Layer 1 into Layer 2:
 o = W⁽²⁾(W⁽¹⁾x + b⁽¹⁾) + b⁽²⁾
   = (W⁽²⁾W⁽¹⁾)x + (W⁽²⁾b⁽¹⁾ + b⁽²⁾)
       ︸────︸       ︸──────────︸
        Wₙₑw           bₙₑw
 ```
 
-An affine function of an affine function is still an affine function - it collapses into a single linear model.
+The two layers **collapse into one** — you just get a single bigger matrix and bias. Adding more linear layers achieves nothing.
+
+> **An affine function of an affine function is still an affine function.**
+
+#### This Generalizes to ANY Depth
+
+Stack 100 layers without activation:
+```
+Layer 1:   h₁ = W⁽¹⁾x + b⁽¹⁾
+Layer 2:   h₂ = W⁽²⁾h₁ + b⁽²⁾
+...
+Layer 100: o  = W⁽¹⁰⁰⁾h₉₉ + b⁽¹⁰⁰⁾
+
+→ By repeated substitution: o = Wₙₑw·x + bₙₑw   ← ONE linear layer
+```
+
+No matter how deep, without non-linearity it's always equivalent to **a single linear regression / logistic regression**.
+
+#### Why This Limits What You Can Learn
+
+A linear model can only create **straight-line decision boundaries** (hyperplanes). It cannot solve XOR or classify complex patterns:
+
+```
+Linear boundary:          Non-linear boundary:
+      |                        _____
+  A   |   B              A   /       \   A
+      |                     |    B    |
+  A   |   B              A   \_______/   A
+```
+
+#### What Activation Functions Do
+
+ReLU, Sigmoid, Tanh **break the linearity** so layers can no longer be collapsed:
+
+```
+With ReLU:
+h = ReLU(W⁽¹⁾x + b⁽¹⁾) = max(0, W⁽¹⁾x + b⁽¹⁾)
+```
+
+You **cannot substitute** and simplify — `max(0, ·)` is non-linear, so each layer remains distinct and the network gains the ability to represent arbitrarily complex functions (Universal Approximation Theorem).
+
+> **Bottom line:** More linear layers = more matrix multiplications = still just one matrix multiplication. Activation functions are the **only thing** that gives network depth its power.
+
 
 ### Activation Functions
 
@@ -233,9 +383,54 @@ An affine function of an affine function is still an affine function - it collap
 ```
 ReLU(x) = max(x, 0)
 ```
-- **Piecewise linear:** Preserves many optimization properties
+
+**Piecewise Linear — Explained:**
+
+**Piecewise linear** means the function is made of **multiple straight line segments**, each applying in a different region of the input. ReLU has exactly two pieces:
+
+```
+output
+  |             /
+  |            /   ← slope = 1 (active region: linear)
+  |           /
+  |──────────/──────── input
+             0
+  (flat, slope = 0)
+```
+
+Two pieces:
+- **x ≤ 0:** flat line (slope = 0) → output is always 0
+- **x > 0:** diagonal line (slope = 1) → output equals input
+
+Each piece is linear. Together → **piecewise linear** (non-linear overall).
+
+**Why this matters for Neural Networks:**
+
+Each neuron has its own "kink point" (where it switches from flat to active). With many neurons, you get many kink points — together they can approximate any curved function:
+
+```
+Many ReLU neurons combined:
+        /\      /\
+       /  \    /  \
+──────/    \──/    \────
+```
+
+The more neurons, the more kink points, the closer to any smooth curve → **Universal Approximation**.
+
+**Piecewise Linear vs. Smooth Activations:**
+
+| Property | ReLU (piecewise linear) | Sigmoid / Tanh (smooth) |
+|---|---|---|
+| **Gradient** | Either 0 or 1 (constant per region) | Continuously varying |
+| **Vanishing gradient?** | ❌ No (gradient = 1 for x > 0) | ✅ Yes (saturates for large \|x\|) |
+| **Computation** | ✅ Very fast (just a threshold) | ❌ Slower (exponential) |
+| **Dead neurons?** | ✅ Possible (x always < 0) | ❌ Never fully dead |
+
+> **In short:** Piecewise linear = "not globally linear, but locally linear in pieces." Gives non-linearity (so depth has power) while keeping gradients well-behaved (so training is efficient).
+
 - **Computation:** Extremely fast (simple thresholding)
 - **Gradient:** 1 if x > 0, 0 if x < 0. Avoids "vanishing gradient" for positive inputs
+
 
 #### Sigmoid
 ```
@@ -480,22 +675,77 @@ L(y, ŷ) = -[y log(ŷ) + (1 - y) log(1 - ŷ)]
 
 **Why is it important?**
 
-1. **Symmetry Breaking:** If all weights initialized to same constant, every neuron computes same output and receives same gradient
-2. **Gradient Stability:** Too large → exploding gradients; Too small → vanishing gradients
+#### 1. Symmetry Breaking
+
+If all weights are initialized to the **same constant** (e.g., all zeros), every neuron in a layer:
+- Receives the same input
+- Computes the same output
+- Receives the same gradient
+- Updates identically — **forever**
+
+```
+Neuron 1: w = [0,0,0] → output = 0 → gradient = g
+Neuron 2: w = [0,0,0] → output = 0 → gradient = g
+Neuron 3: w = [0,0,0] → output = 0 → gradient = g
+
+After update: all neurons STILL identical → wasted capacity
+```
+
+Result: The entire hidden layer collapses to **effectively one neuron**. Fix: initialize weights **randomly** so neurons start different and learn different features.
+
+#### 2. Gradient Stability — The Goldilocks Problem
+
+Signals are multiplied by weights $L$ times as they pass through layers. Even a small imbalance compounds:
+
+```
+Too large: 1.5¹⁰⁰ = 4 × 10¹⁷  → explodes (NaN loss)
+Too small: 0.5¹⁰⁰ ≈ 0          → vanishes (no learning)
+Just right: ~1.0¹⁰⁰ = stable   ✅
+```
+
+| Weight scale | What happens |
+|---|---|
+| **Too large** | Activations/gradients explode → NaN, training fails |
+| **Too small** | Signal shrinks layer by layer → gradients vanish → no learning |
+| **Just right** | Signal flows forward and backward stably |
+
+---
 
 **Initialization Methods:**
 
-- **Xavier (Glorot) Initialization** (for Sigmoid/Tanh):
-  ```
-  W ~ U(-√(6/(dᵢₙ + dₒᵤₜ)), √(6/(dᵢₙ + dₒᵤₜ)))
-  ```
+#### Xavier / Glorot Initialization (for Sigmoid / Tanh)
 
-- **He Initialization** (for ReLU):
-  ```
-  W ~ N(0, 2/dᵢₙ)
-  ```
+```
+W ~ U(-√(6/(dᵢₙ + dₒᵤₜ)), √(6/(dᵢₙ + dₒᵤₜ)))
+```
 
-- **Biases:** b₁ = 0, b₂ = 0 (typically initialized to zero)
+- **Goal:** Keep variance of activations **constant across layers**
+- Scales with both fan-in ($d_{\text{in}}$) and fan-out ($d_{\text{out}}$)
+- Designed for **symmetric, zero-centered** activations (Sigmoid/Tanh)
+- Larger layer → smaller weights (to compensate for more inputs)
+
+#### He Initialization (for ReLU)
+
+```
+W ~ N(0, 2/dᵢₙ)
+```
+
+- **Goal:** Account for the fact that ReLU **zeros out half the neurons** (negative side → 0)
+- Factor of **2** (vs. 1 in Xavier) compensates for the dead half
+- Larger fan-in → smaller variance → prevents explosion
+
+| | Xavier / Glorot | He |
+|---|---|---|
+| **For** | Sigmoid, Tanh | ReLU, Leaky ReLU |
+| **Scale factor** | $\frac{1}{d_{\text{in}} + d_{\text{out}}}$ | $\frac{2}{d_{\text{in}}}$ |
+| **Why different?** | Symmetric activations, full gradient preserved | ReLU zeros half → needs 2× boost |
+
+#### Biases: Always Start at Zero
+
+Unlike weights, biases **don't cause the symmetry problem** — neurons have different weights, so they still learn different features even if all biases start at 0. Zero is the clean, neutral starting point.
+
+> **Summary:** Initialization = giving the network a **fair, diverse, and numerically stable starting point** — random enough to break symmetry, scaled correctly to prevent gradient explosion or vanishing.
+
 
 ### Batch vs. Stochastic Gradient Descent
 
@@ -535,31 +785,73 @@ Split data into three disjoint sets:
 | **Actual Positive** | True Positive (TP) | False Negative (FN) |
 | **Actual Negative** | False Positive (FP) | True Negative (TN) |
 
+| Cell | Plain English |
+|---|---|
+| **TP** (True Positive) | Correctly caught it |
+| **TN** (True Negative) | Correctly dismissed it |
+| **FP** (False Positive) | False alarm — predicted positive but actually negative |
+| **FN** (False Negative) | Missed it — predicted negative but actually positive |
+
+---
+
 ### Evaluation Metrics
 
-**Accuracy:**
+#### Accuracy
 ```
 Accuracy = (TP + TN) / (TP + TN + FP + FN)
 ```
-*Limitation: Misleading for imbalanced classes*
+> *"Out of everything, how many did I get right?"*
 
-**Precision (Positive Predictive Value):**
+⚠️ **Limitation:** Misleading for imbalanced classes. A model that always predicts "No" on a 95% negative dataset gets 95% accuracy — but is useless.
+
+---
+
+#### Precision (Positive Predictive Value)
 ```
 Precision = TP / (TP + FP)
 ```
-*Of all instances predicted positive, how many were actually positive?*
+> *"Of everything I called positive, how many actually were?"*
 
-**Recall (Sensitivity / TPR):**
+- Focuses on **false alarms** (FP)
+- High precision = "when I say positive, I'm usually right"
+- **Use when FP is costly** → e.g. spam filter (don't wrongly flag real emails)
+
+---
+
+#### Recall (Sensitivity / TPR)
 ```
 Recall = TP / (TP + FN)
 ```
-*Of all actual positive instances, how many did the model correctly identify?*
+> *"Of all the actual positives, how many did I catch?"*
 
-**F1 Score:**
+- Focuses on **missed cases** (FN)
+- High recall = "I catch almost every real positive"
+- **Use when FN is costly** → e.g. cancer detection (don't miss sick patients)
+
+---
+
+#### F1 Score
 ```
 F1 = 2 · (Precision · Recall) / (Precision + Recall)
 ```
-*Harmonic mean of Precision and Recall*
+> *"Balanced score that penalizes heavily if either precision or recall is very low"*
+
+- **Harmonic mean** — pulls closer to the lower of the two values
+- Best single metric for **imbalanced datasets**
+- Use when you need **both** false alarms and missed cases to be low
+
+---
+
+#### Precision-Recall Tradeoff
+
+You can't usually maximize both simultaneously — they pull against each other:
+
+```
+Lower threshold → catch more positives → ↑ Recall, ↓ Precision
+Higher threshold → fewer false alarms  → ↑ Precision, ↓ Recall
+```
+
+---
 
 **False Positive Rate (FPR):**
 ```
@@ -571,11 +863,33 @@ FPR = FP / (FP + TN)
 Specificity = TN / (TN + FP) = 1 - FPR
 ```
 
+---
+
 ### Which Metric to Use?
 
-- **Imbalanced Classes:** Avoid Accuracy. Use Precision, Recall, or F1 Score
-- **High Cost of False Negatives (e.g., Medical Tests):** Prioritize High Recall
-- **High Cost of False Positives (e.g., Spam Detection):** Prioritize High Precision
+| Metric | Use when... | Example |
+|---|---|---|
+| **Accuracy** | Classes are balanced | General classification |
+| **Precision** | False alarms are costly | Spam filter, fraud alerts |
+| **Recall** | Missing cases is costly | Cancer screening, fault detection |
+| **F1 Score** | Want balance of both; imbalanced data | Medical diagnosis, NLP |
+
+---
+
+### Numeric Example
+
+Suppose: TP=80, FP=20, FN=10, TN=890 (n=1000)
+
+| Metric | Calculation | Result |
+|---|---|---|
+| Accuracy | (80+890)/1000 | 97% ← deceptive! |
+| Precision | 80/(80+20) | 80% |
+| Recall | 80/(80+10) | 89% |
+| F1 | 2×(0.80×0.89)/(0.80+0.89) | **84.4%** |
+
+> Accuracy looks great at 97%, but F1=84% gives a more honest picture of performance on the positive class.
+
+
 
 ### ROC Curve and AUC
 

@@ -2,6 +2,9 @@
 .claude/
 !CLAUDE.md
 
+# github
+.github/
+
 # Local environment
 .env
 
@@ -11,6 +14,19 @@
 
 # VS Code
 .vscode/
+
+# RStudio
+.Rhistory
+.Rproj.user
+
+# dataset
+dataset/
+
+# data
+data/
+
+# checkpoint
+checkpoints/
 
 # LaTeX artifacts
 *.gz
@@ -22,11 +38,6 @@
 
 # Checkpoint files
 *.pth
-
-# RStudio
-.RData
-.Rhistory
-.Rproj.user
 
 # Python
 __pycache__/

@@ -236,7 +236,40 @@ All models follow the same fundamental rules:
 |-------|------------|
 | Linear | Gradients are constant globally |
 | Kernel/RBF | y values are similar if x values are close (smoothness) |
-| CNNs | Spatial invariance |
+| CNNs | **Translation invariance** (spatial invariance) |
+
+#### Translation Invariance — Explained
+
+**Translation invariance** means the model produces the **same output regardless of where in the input a feature appears**.
+
+```
+Cat top-left:     Cat center:       Cat bottom-right:
+🐱 . . . . .     . . . . . .       . . . . . .
+. . . . . .       . . 🐱 . . .     . . . . . .
+. . . . . .       . . . . . .       . . . . . 🐱
+
+All three → same output: "cat"
+```
+
+**Why MLPs fail at this:**
+MLPs assign fixed weights to each pixel position. The same cat shifted by one pixel activates completely different weights — the model must relearn the cat for every possible position.
+
+**How CNNs achieve it:**
+
+| Mechanism | How it helps |
+|---|---|
+| **Shared weights (convolution)** | The same filter scans the whole image — detects the same feature anywhere |
+| **Pooling (max/avg)** | Summarizes a region → small shifts don't change the output |
+
+**Translation Invariance vs. Equivariance:**
+
+| | Invariance | Equivariance |
+|---|---|---|
+| **Meaning** | Output unchanged when input shifts | Output shifts the same way as input |
+| **Example** | "Is there a cat?" → always yes | "Where is the cat?" → location shifts too |
+| **Used in** | Classification (CNNs + pooling) | Detection, segmentation |
+
+> **Bottom line:** Translation invariance = "the same pattern anywhere in the input gives the same answer." It's why CNNs are powerful for images — a cat is a cat no matter where it appears.
 
 ---
 
@@ -313,9 +346,12 @@ L₀/₁(y, f(x)) = 𝕀(y ≠ sign(f(x)))
 > R(f) = 𝔼_X,Y[L(Y, f(X))] = ∫ L(y, f(x))dP(x, y)
 > ```
 
+**Intuition:** The true risk is the **actual average loss** your model makes over the **entire data distribution** — including all possible future data you'll never see. It answers: *"How wrong is my model in the real world?"*
+
 **The Fundamental Problem:**
 - We do **not know** P(X, Y)
 - Therefore, we **cannot compute** R(f) directly
+- It is the "ground truth" of how good your model really is
 
 ---
 
@@ -325,6 +361,19 @@ L₀/₁(y, f(x)) = 𝕀(y ≠ sign(f(x)))
 > ```
 > R̂(f) = (1/n) Σᵢ₌₁ⁿ L(yᵢ, f(xᵢ))
 > ```
+
+**Intuition:** Empirical risk is your best **approximation** of the true risk using only the finite training set you actually have. It is what you directly minimize during training (your training loss).
+
+| | True Risk R(f) | Empirical Risk R̂(f) |
+|---|---|---|
+| **Based on** | Full data distribution (unknown) | Training set only (observed) |
+| **Computable?** | ❌ No | ✅ Yes |
+| **What it measures** | Real-world generalization | Training performance |
+
+**Key tension in ML:**
+- Empirical Risk ↓ → model fits training data well
+- True Risk ↓ → model generalizes to new data
+- **Overfitting** = empirical risk is very low but true risk is high
 
 **Assumptions:**
 - Data are i.i.d.
@@ -383,25 +432,99 @@ R(f̂) - R(f*) = [R(f*_H) - R(f*)] + [R(f̂) - R(f*_H)]
 
 ### The Bias-Variance Trade-off
 
+#### In Plain English
+
+**Bias — "Consistently Wrong"**
+Bias is how far off your model is **on average**, even if you retrained it on many different datasets.
+
+> 🎯 Like a broken clock that always shows 3:00 — it's **consistently wrong** regardless of when you check.
+
+- High bias = model makes the **same type of mistake** no matter what data it sees
+- Caused by the model being **too simple** to capture the real pattern (underfitting)
+
+**Variance — "Inconsistently Right"**
+Variance is how much your model's predictions **change** depending on which training data it happened to see.
+
+> 🎯 Like a jittery person who gives a different answer every time you ask the same question — high variance means you can't rely on the model.
+
+- High variance = model is **very sensitive** to the exact training data it saw
+- Caused by the model being **too complex**, memorizing noise instead of patterns (overfitting)
+
+**The Shooting Target**
+
 ```
-           High
-             │
-     Error   │    ╭──── True Risk R(f)
-             │   ╱
-             │  ╱    Overfitting
-             │ ╱      Zone
-             │╱
-     Low     │───────── Training Error R̂(f)
-             └────────────────────────────────
-             Low    Optimal    High
-                  Complexity
+                 Hit the bullseye?
+                   YES          NO
+                ┌──────────┬──────────┐
+Shots    YES    │ Low Bias │ High     │
+clustered?      │ Low Var  │ Bias     │
+                │ ✅ BEST  │ Low Var  │
+                ├──────────┼──────────┤
+          NO    │ Low Bias │ High     │
+                │ High Var │ Bias     │
+                │ Scattered│ High Var │
+                │          │ ❌ WORST │
+                └──────────┴──────────┘
+```
+
+#### Mathematical Decomposition
+
+For any prediction point x, the expected MSE decomposes as:
+
+```
+Total Error = Bias²[f̂(x)]  +  Var[f̂(x)]  +  σ²
+               (systematic)    (sensitivity)   (noise)
+```
+
+#### The Three Terms Explained
+
+| Term | Meaning | Cause |
+|---|---|---|
+| **Bias²** | How wrong *on average* | Model too simple — wrong assumptions |
+| **Variance** | How sensitive to training set | Model too complex — memorizes noise |
+| **σ² (irreducible)** | Noise inherent in data | Cannot be reduced regardless of model |
+
+- **High Bias → Underfitting:** A linear model on curved data is always wrong regardless of the data
+- **High Variance → Overfitting:** A degree-15 polynomial fits training data perfectly but goes wild on new data
+
+
+#### Visual of the Tradeoff
+
+```
+Model Complexity →→→→→→→→→→→→→→
+
+Bias     ████████░░░░░░░░░░░░  (decreases)
+Variance ░░░░░░░░████████████  (increases)
+Total    ████░░░░░░░░░░░░████  (U-shaped)
+                    ↑
+               Sweet spot  ← selected by cross-validation
 ```
 
 | Regime | H Size | Bias | Variance | Risk |
 |--------|--------|------|----------|------|
 | Underfitting | Small | High | Low | High |
-| Optimal | Medium | Balanced | Balanced | Lowest |
+| Optimal | Medium | Balanced | Balanced | **Lowest** |
 | Overfitting | Large | Low | High | High |
+
+#### Effect of Regularization on Bias-Variance
+
+| Regularization | Effect on Bias | Effect on Variance |
+|---|---|---|
+| Increase λ (more penalty) | ⬆️ Bias increases | ⬇️ Variance decreases |
+| Decrease λ (less penalty) | ⬇️ Bias decreases | ⬆️ Variance increases |
+
+The optimal λ found by cross-validation is the sweet spot that minimizes **total error** (Bias² + Variance).
+
+#### Archer Analogy
+
+Think of 10 archers shooting at a target across different training datasets:
+
+| | Shots clustered? | Centred on target? | Result |
+|---|---|---|---|
+| Low Bias, Low Variance | ✅ Yes | ✅ Yes | **Ideal** |
+| High Bias, Low Variance | ✅ Yes | ❌ No | Consistently off |
+| Low Bias, High Variance | ❌ No | ✅ Yes (on avg) | Scattered |
+| High Bias, High Variance | ❌ No | ❌ No | Worst case |
 
 ---
 
@@ -412,11 +535,33 @@ R(f̂) - R(f*) = [R(f*_H) - R(f*)] + [R(f̂) - R(f*_H)]
 > GenGap = R(f̂) - R̂(f̂)
 > ```
 
-**Why does it exist?**
-- **Optimization Bias:** f̂ was chosen specifically to minimize R̂
-- **Overfitting:** Model adapted to random noise in training data
+The generalization gap is the difference between how well your model performs on **new, unseen data** (true risk) vs. on **training data** (empirical risk).
 
-**Result:** R̂(f̂) is an **optimistically biased** estimate of R(f̂).
+#### Why Does It Exist?
+
+- **Optimization Bias:** $\hat{f}$ was chosen *specifically* to minimize $\hat{R}$ on training data, so $\hat{R}(\hat{f})$ is an **optimistically biased** estimate of true performance.
+- **Overfitting:** Model adapted to random noise in training data rather than the true underlying pattern.
+
+#### Visual Intuition
+
+```
+Training data performance  →  R̂(f̂)  →  too optimistic
+New data performance       →  R(f̂)   →  the real score
+                                ↑
+                          GenGap lives here
+```
+
+> **Student analogy:** A student who memorizes past exam answers scores perfectly on those but fails the actual exam. That gap between their practice score and real exam score is the generalization gap.
+
+#### How to Reduce It
+
+| Strategy | Mechanism |
+|---|---|
+| **More data** ($n$ ↑) | Bounds tighten; empirical risk better approximates true risk |
+| **Regularization** (L1/L2) | Restricts effective model complexity |
+| **Cross-validation** | Uses held-out data to estimate true risk more honestly |
+| **Early stopping** | Stops training before model overfits |
+| **Dropout / Data augmentation** | Reduces variance in deep learning |
 
 ---
 
@@ -541,36 +686,85 @@ Works for: OLS, Ridge, Kernel Ridge
 
 ---
 
-### Gradient Descent (GD)
+### Gradient Descent (GD) — "Full Batch"
+
+At every step, compute the gradient using **all $n$ training samples**:
+
+```
+w ← w - η · (1/n) Σᵢ₌₁ⁿ ∇_w ℓ(yᵢ, f(xᵢ))
+```
 
 ```
 Algorithm: Gradient Descent
 1: Initialize parameters θ (e.g., random)
 2: while not converged do
-3:     Compute gradient: g = ∇_θ R̂(f_θ)
+3:     Compute gradient: g = ∇_θ R̂(f_θ)   ← uses ALL n samples
 4:     Update: θ ← θ - η·g
 5: end while
 ```
 
 - η: Learning rate
-- **Issue:** Computing ∇ over all N points is slow
+- **Accurate** — true gradient direction
+- **Slow** — must scan entire dataset before taking one step
+- **Smooth convergence** — loss decreases steadily
 
 ---
 
-### Stochastic Gradient Descent (SGD)
+### Stochastic Gradient Descent (SGD) — "One Sample"
 
-Approximate gradient using single point (or mini-batch):
+Approximate gradient using a **single randomly picked sample**:
+
 ```
-θ ← θ - η∇_θL(yᵢ, f_θ(xᵢ))
+w ← w - η · ∇_w ℓ(yᵢ, f_θ(xᵢ))    ← uses 1 sample
 ```
 
-| Pros | Cons |
-|------|------|
+- **Fast** — one update per sample, many updates per epoch
+- **Noisy** — single-sample gradient is a rough estimate of the true gradient
+- **Noisy convergence** — loss bounces around but trends downward
+
+---
+
+### Mini-Batch SGD — The Practical Standard
+
+Use a small batch of $B$ samples (typically 32–256) per update:
+
+```
+w ← w - η · (1/B) Σᵢ∈batch ∇_w ℓ(yᵢ, f(xᵢ))
+```
+
+This is what's **actually used** in deep learning — balances the accuracy of GD with the speed of SGD.
+
+---
+
+### GD vs. SGD vs. Mini-Batch Comparison
+
+| Property | GD (Full Batch) | SGD (1 Sample) | Mini-Batch SGD |
+|---|---|---|---|
+| **Gradient quality** | Exact | Very noisy | Approximate |
+| **Updates per epoch** | 1 | $n$ | $n/B$ |
+| **Memory use** | All data | 1 sample | $B$ samples |
+| **Convergence** | Smooth, stable | Noisy, bouncy | In between |
+| **Escapes local minima?** | ❌ Harder | ✅ Noise helps | ✅ Somewhat |
+| **GPU parallelism** | ✅ Good | ❌ Poor | ✅ Best |
+| **Used in practice** | Rarely (small data) | Rarely | ✅ Standard |
+
+---
+
+### Why SGD Noise Can Be a Feature, Not a Bug
+
+The randomness in SGD acts as **implicit regularization**:
+- Prevents the optimizer from settling in **sharp, narrow minima** (which tend to overfit)
+- Tends to find **flat minima** — which generalize better to new data
+- Helps explain why deep learning with SGD generalizes better than classical theory predicts
+
+**Fix for noisy convergence:** Adaptive momentum methods like **Adam** (Adaptive Moment Estimation) smooth out noisy gradient updates automatically.
+
+| Pros of SGD | Cons of SGD |
+|---|---|
 | Faster updates | Noisy convergence |
-| Better scaling | |
-| Noise helps escape local minima | |
-
-**Fix:** Adaptive momentum methods (ADAM, etc.)
+| Better GPU scaling | Requires tuning learning rate |
+| Noise helps escape local minima | May overshoot minimum |
+| Implicit regularization effect | |
 
 ---
 
