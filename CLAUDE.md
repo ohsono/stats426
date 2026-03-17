@@ -43,6 +43,12 @@ python main.py train --model resnet10 --continue --epochs 10  # resume from chec
 # Evaluate
 python main.py evaluate --model resnet10 --split test --checkpoint checkpoints/resnet10/best_model.pth
 
+# Compare classical ML models on CNN features (XGBoost, LogReg, RF, SVM)
+python main.py compare --model resnet10 --split test
+
+# Phase 3: domain-adversarial training (DANN) — requires LISA/BDD100K domain loaders
+python main.py train --model resnet10 --dann --lambda-domain 0.1 --epochs-stage3 20 --grl-alpha-max 1.0
+
 # Run all tests
 python -m pytest tests/ -v
 
@@ -62,9 +68,9 @@ python -m pytest tests/test_models.py::TestResNet10::test_output_shape -v
 
 - `project/models/` — Progressive scaling: `BaselineCNN` (3 conv layers) → `AdvancedCNN` (CNN + `SpatialTransformerNetwork`) → `ResNet10` (modified stem: 3x3 stride-1 to preserve spatial info at 64x64) → `OrionVLMStub` (VQA with `LoRALinear`). All default to `num_classes=58`, `image_size=64`.
 
-- `project/training/` — `Trainer` in `engine.py` handles the train/val loop with AMP (CUDA only), checkpoint save/load, early stopping, and best-model tracking. `CurriculumScheduler` manages staged dataset introduction (geometric → real-world → domain adversarial). `domain_adv.py` implements gradient reversal for domain-invariant features.
+- `project/training/` — `Trainer` in `engine.py` handles the train/val loop with AMP (CUDA only), checkpoint save/load, early stopping, and best-model tracking. `DANNTrainer` (also in `engine.py`) extends `Trainer` for domain-adversarial training via `GradientReversalLayer` in `domain_adv.py`. `CurriculumScheduler` in `curriculum.py` manages staged dataset introduction (geometric → real-world → domain adversarial). `schedulers.py` wraps PyTorch LR schedulers via `build_scheduler()`.
 
-- `project/evaluation/` — `metrics.py` (precision/recall/F1, critical class recall for safety signs), `calibration.py` (ECE, reliability diagrams), `ood_testing.py` (OOD degradation analysis).
+- `project/evaluation/` — `metrics.py` (precision/recall/F1, critical class recall for safety signs), `calibration.py` (ECE, reliability diagrams), `ood_testing.py` (OOD degradation analysis), `classical_ml.py` (extracts CNN penultimate-layer features and benchmarks XGBoost/LogReg/RF/SVM on them).
 
 **Cross-cutting modules** in `project/utils/`: `device.py` (auto-selects cuda > mps > cpu), `config.py` (dataclass-based `Config`/`DataConfig`/`TrainConfig`/`EvalConfig`, paths from `.env`), `logger.py` (TensorBoard integration).
 
