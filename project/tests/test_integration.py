@@ -37,7 +37,7 @@ from data.datasets import DOTDataset, GTSRBDataset, UnifiedTrafficSignDataset
 from data.dataloaders import stratified_split, create_dataloaders
 from models.baseline import BaselineCNN
 from models.advanced import AdvancedCNN
-from models.resnet import ResNet10
+from models.resnet import ResNet50
 from training.engine import Trainer
 from training.curriculum import CurriculumScheduler, Stage
 from training.schedulers import build_scheduler
@@ -129,7 +129,7 @@ class TestDataToModel:
     def test_dot_to_resnet(self, dot_fixture):
         ds = DOTDataset(dot_fixture, transform=eval_transform())
         loader = DataLoader(ds, batch_size=3)
-        model = ResNet10(num_classes=3).eval()
+        model = ResNet50(num_classes=3).eval()
         images, _ = next(iter(loader))
         with torch.no_grad():
             out = model(images)
@@ -170,7 +170,7 @@ class TestDataToTrainer:
         assert (tmp_dir / "ckpt" / "checkpoint_last.pth").exists()
 
     def test_fit_synthetic_resnet(self, synthetic_loader_3class, tmp_dir):
-        model = ResNet10(num_classes=3)
+        model = ResNet50(num_classes=3)
         optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
         trainer = Trainer(
             model=model, optimizer=optimizer,
@@ -395,8 +395,8 @@ class TestLoggingIntegration:
     """Verify log files are created with the correct naming convention."""
 
     def test_log_file_created(self, tmp_dir):
-        log_file = create_log_file("train", "resnet10", log_dir=tmp_dir)
-        assert "train-resnet10-" in log_file.name
+        log_file = create_log_file("train", "resnet50", log_dir=tmp_dir)
+        assert "train-resnet50-" in log_file.name
         assert log_file.name.endswith(".log")
 
     def test_verbose_logger_writes_file(self, synthetic_loader_3class, tmp_dir):
@@ -426,7 +426,7 @@ class TestLoggingIntegration:
 
     def test_evaluation_logging(self, tmp_dir):
         logger = ExperimentLogger(
-            log_dir=tmp_dir, function="eval", model_name="resnet10",
+            log_dir=tmp_dir, function="eval", model_name="resnet50",
             verbose=True,
         )
         logger.log_evaluation("test", {"accuracy": 0.92, "macro avg": {"f1-score": 0.89}})

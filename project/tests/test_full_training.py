@@ -3,7 +3,7 @@ Full Training Test — end-to-end training on the real DOT dataset.
 
 This test:
   1. Loads the real DOT reference images from ./dataset/DOT/
-  2. Trains baseline, advanced, and resnet10 models for a few epochs
+  2. Trains baseline, advanced, and resnet50 models for a few epochs
   3. Evaluates with classification report, ECE, critical class recall
   4. Saves checkpoints and verbose log files to a temp dir
   5. Verifies all artifacts are created correctly
@@ -35,7 +35,7 @@ from data.datasets import DOTDataset
 from data.dataloaders import stratified_split
 from models.baseline import BaselineCNN
 from models.advanced import AdvancedCNN
-from models.resnet import ResNet10
+from models.resnet import ResNet50
 from training.engine import Trainer
 from training.schedulers import build_scheduler
 from evaluation.metrics import collect_predictions, classification_report_dict, critical_class_recall
@@ -168,20 +168,20 @@ class TestFullTrainBaseline:
 
 
 # ===================================================================
-# 3. Full Training — ResNet10
+# 3. Full Training — ResNet50
 # ===================================================================
 
 class TestFullTrainResNet:
-    """Train ResNet10 on real DOT data with cosine scheduler."""
+    """Train ResNet50 on real DOT data with cosine scheduler."""
 
     def test_train_resnet_on_dot(self, dot_loaders, tmp_dir):
         n_cls = num_classes()
-        model = ResNet10(num_classes=n_cls)
+        model = ResNet50(num_classes=n_cls)
         optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-4)
         scheduler = build_scheduler(optimizer, name="cosine", total_epochs=5)
         logger = ExperimentLogger(
             log_dir=tmp_dir / "logs", function="train",
-            model_name="resnet10", verbose=True,
+            model_name="resnet50", verbose=True,
         )
         trainer = Trainer(
             model=model, optimizer=optimizer,
@@ -200,7 +200,7 @@ class TestFullTrainResNet:
         assert (tmp_dir / "ckpt" / "best_model.pth").exists()
         # Verify log file naming convention
         log_name = logger.log_file_path.name
-        assert log_name.startswith("train-resnet10-")
+        assert log_name.startswith("train-resnet50-")
         assert log_name.endswith(".log")
 
 

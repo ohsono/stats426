@@ -112,6 +112,7 @@ GTSRB_CLASSES: Dict[int, str] = {
 # ---------------------------------------------------------------------------
 LISA_LABEL_MAP: Dict[str, int] = {
     "stop":                0,
+    "stopleft":            0,   # stop sign seen from the left — same class
     "yield":               1,
     "speedlimitsign":      2,
     "norightturn":         5,
@@ -121,6 +122,9 @@ LISA_LABEL_MAP: Dict[str, int] = {
     "pedestriancrossing": 40,
     "keepright":          16,
     "keepleft":           17,
+    # "go" / "goLeft" / "goForward" / "warning" / "warningLeft" are traffic
+    # lights or generic warning shapes with no DOT equivalent — they are
+    # excluded here and collected as DOMAIN_LABEL=-1 in preprocess_lisa.py.
 }
 
 # ---------------------------------------------------------------------------

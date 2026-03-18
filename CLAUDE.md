@@ -34,20 +34,20 @@ pip install -r requirements.txt
 # Check device info
 python main.py info
 
-# Train models (baseline, advanced, resnet10, orion)
-python main.py train --model resnet10 --stage full --verbose
+# Train models (baseline, advanced, resnet50, orion)
+python main.py train --model resnet50 --stage full --verbose
 python main.py train --model baseline --stage geometric --epochs 20
 python main.py train --model advanced --epochs 30 --patience 10
-python main.py train --model resnet10 --continue --epochs 10  # resume from checkpoint
+python main.py train --model resnet50 --continue --epochs 10  # resume from checkpoint
 
 # Evaluate
-python main.py evaluate --model resnet10 --split test --checkpoint checkpoints/resnet10/best_model.pth
+python main.py evaluate --model resnet50 --split test --checkpoint checkpoints/resnet50/best_model.pth
 
 # Compare classical ML models on CNN features (XGBoost, LogReg, RF, SVM)
-python main.py compare --model resnet10 --split test
+python main.py compare --model resnet50 --split test
 
 # Phase 3: domain-adversarial training (DANN) — requires LISA/BDD100K domain loaders
-python main.py train --model resnet10 --dann --lambda-domain 0.1 --epochs-stage3 20 --grl-alpha-max 1.0
+python main.py train --model resnet50 --dann --lambda-domain 0.1 --epochs-stage3 20 --grl-alpha-max 1.0
 
 # Run all tests
 python -m pytest tests/ -v
@@ -66,7 +66,7 @@ python -m pytest tests/test_models.py::TestResNet10::test_output_shape -v
 
 - `project/data/` — Dataset classes (`DOTDataset`, `GTSRBDataset`, `LISADataset`, `BDD100KDataset`), all inheriting from `TrafficSignDataset`. `unify.py` defines the canonical DOT label space (0-57, 58 classes) and cross-dataset label maps (`GTSRB_TO_DOT`, `LISA_LABEL_MAP`, `BDD100K_LABEL_MAP`). Transforms in `transforms.py` are domain-specific (heavier augmentation for BDD100K dashcam, lighter for clean GTSRB).
 
-- `project/models/` — Progressive scaling: `BaselineCNN` (3 conv layers) → `AdvancedCNN` (CNN + `SpatialTransformerNetwork`) → `ResNet10` (modified stem: 3x3 stride-1 to preserve spatial info at 64x64) → `OrionVLMStub` (VQA with `LoRALinear`). All default to `num_classes=58`, `image_size=64`.
+- `project/models/` — Progressive scaling: `BaselineCNN` (3 conv layers) → `AdvancedCNN` (CNN + `SpatialTransformerNetwork`) → `ResNet50` (`Bottleneck` blocks `[3,4,6,3]`, modified stem: 3×3 stride-1 to preserve spatial info at 64×64, feature dim 2048) → `OrionVLMStub` (VQA with `LoRALinear`). All default to `num_classes=58`, `image_size=64`.
 
 - `project/training/` — `Trainer` in `engine.py` handles the train/val loop with AMP (CUDA only), checkpoint save/load, early stopping, and best-model tracking. `DANNTrainer` (also in `engine.py`) extends `Trainer` for domain-adversarial training via `GradientReversalLayer` in `domain_adv.py`. `CurriculumScheduler` in `curriculum.py` manages staged dataset introduction (geometric → real-world → domain adversarial). `schedulers.py` wraps PyTorch LR schedulers via `build_scheduler()`.
 

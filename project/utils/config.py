@@ -110,5 +110,5 @@ class Config:
     data: DataConfig = field(default_factory=DataConfig)
     train: TrainConfig = field(default_factory=TrainConfig)
     eval: EvalConfig = field(default_factory=EvalConfig)
-    model_name: str = "resnet10"  # baseline | advanced | resnet10 | orion
+    model_name: str = "resnet50"  # baseline | advanced | resnet50 | orion
     seed: int = 42

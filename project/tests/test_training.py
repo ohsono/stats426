@@ -26,7 +26,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from models.baseline import BaselineCNN
-from models.resnet import ResNet10
+from models.resnet import ResNet50
 from training.engine import Trainer, DANNTrainer
 from training.curriculum import CurriculumScheduler, Stage
 from training.domain_adv import (
@@ -329,11 +329,11 @@ class TestDANNTrainer:
 
     # --- tests ---
 
-    def test_extract_features_resnet10(self):
-        model = ResNet10()
+    def test_extract_features_resnet50(self):
+        model = ResNet50()
         x = torch.randn(4, 3, IMAGE_SIZE, IMAGE_SIZE)
         feats = model.extract_features(x)
-        assert feats.shape == (4, 512)
+        assert feats.shape == (4, 2048)
 
     def test_extract_features_baseline(self):
         model = BaselineCNN()

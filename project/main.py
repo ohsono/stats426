@@ -2,8 +2,8 @@
 Traffic Sign Recognition — Monolithic CLI Entry Point.
 
 Usage examples:
-    # Train on DOT dataset with ResNet10
-    python main.py train --model resnet10 --stage full --verbose
+    # Train on DOT dataset with ResNet50
+    python main.py train --model resnet50 --stage full --verbose
 
     # Train baseline on geometric stage only
     python main.py train --model baseline --stage geometric
@@ -12,7 +12,7 @@ Usage examples:
     python main.py train --model advanced --epochs 30 --patience 10
 
     # Evaluate a saved checkpoint
-    python main.py evaluate --model resnet10 --split test --checkpoint checkpoints/best_model.pth
+    python main.py evaluate --model resnet50 --split test --checkpoint checkpoints/best_model.pth
 
     # Show device info
     python main.py info
@@ -33,7 +33,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from utils.device import get_device, device_info
-from utils.config import Config, DataConfig, DATA_DIR, CHECKPOINT_DIR, LOG_DIR
+from utils.config import Config, DataConfig, DATA_DIR, CHECKPOINT_DIR, LOG_DIR, PROJECT_ROOT
 
 
 def build_model(name: str, num_classes: int) -> nn.Module:
@@ -47,6 +47,9 @@ def build_model(name: str, num_classes: int) -> nn.Module:
     elif name == "resnet10":
         from models.resnet import ResNet10
         return ResNet10(num_classes=num_classes)
+    elif name == "resnet50":
+        from models.resnet import ResNet50
+        return ResNet50(num_classes=num_classes)
     elif name == "orion":
         from models.orion_vlm import OrionVLMStub
         return OrionVLMStub(num_classes=num_classes)
@@ -135,6 +138,27 @@ def build_dot_loaders(batch_size: int = 8, num_workers: int = 0):
         if len(lisa_domain) > 0:
             domain_datasets.append(lisa_domain)
             print(f"  LISA:    {len(lisa_domain):6d} crops (domain-only)")
+
+    # ── BDD100K extracted (labeled crops from extract_bdd100k_labels.py) ──
+    extracted_root = PROJECT_ROOT / "extracted"
+    extracted_ann = extracted_root / "annotations.json"
+    if extracted_ann.exists():
+        bdd_supervised = BDD100KDataset(
+            extracted_root,
+            transform=bdd100k_train_transform(),
+            annotation_file="annotations.json",
+            domain_only=False,
+        )
+        bdd_supervised_eval = BDD100KDataset(
+            extracted_root,
+            transform=eval_transform(),
+            annotation_file="annotations.json",
+            domain_only=False,
+        )
+        if len(bdd_supervised) > 0:
+            supervised_train.append(bdd_supervised)
+            supervised_eval.append(bdd_supervised_eval)
+            print(f"  BDD100K* {len(bdd_supervised):6d} labeled crops (extracted, supervised)")
 
     # ── BDD100K (on-the-fly crop extraction; domain adaptation only) ──
     bdd100k_root = DATA_DIR / "BDD_100K"
@@ -244,7 +268,7 @@ def cmd_train(args):
         lambda_domain = args.lambda_domain if args.lambda_domain is not None else cfg.train.lambda_domain
         grl_alpha_max = args.grl_alpha_max if args.grl_alpha_max is not None else cfg.train.grl_alpha_max
         dann_epochs   = args.epochs_stage3 if args.epochs_stage3 is not None else cfg.train.epochs_stage3
-        feature_dim_map = {"resnet10": 512, "baseline": 256, "advanced": 512, "orion": 512}
+        feature_dim_map = {"resnet10": 512, "resnet50": 2048, "baseline": 256, "advanced": 512, "orion": 512}
         feature_dim = feature_dim_map.get(cfg.model_name, 512)
         domain_cls = DomainClassifier(feature_dim=feature_dim, num_domains=cfg.train.num_domains)
         # Add domain classifier params NOW so optimizer has the right param group
@@ -523,8 +547,8 @@ def main():
 
     # train
     p_train = sub.add_parser("train", help="Train a model")
-    p_train.add_argument("--model", default="resnet10",
-                         choices=["baseline", "advanced", "resnet10", "orion"])
+    p_train.add_argument("--model", default="resnet50",
+                         choices=["baseline", "advanced", "resnet10", "resnet50", "orion"])
     p_train.add_argument("--stage", default="full",
                          choices=["geometric", "real_world", "full"])
     p_train.add_argument("--epochs", type=int, default=None,
@@ -552,8 +576,8 @@ def main():
 
     # evaluate
     p_eval = sub.add_parser("evaluate", help="Evaluate a model")
-    p_eval.add_argument("--model", default="resnet10",
-                        choices=["baseline", "advanced", "resnet10", "orion"])
+    p_eval.add_argument("--model", default="resnet50",
+                        choices=["baseline", "advanced", "resnet10", "resnet50", "orion"])
     p_eval.add_argument("--split", default="test",
                         choices=["val", "test", "ood"])
     p_eval.add_argument("--checkpoint", default=None)
@@ -563,8 +587,8 @@ def main():
 
     # compare
     p_comp = sub.add_parser("compare", help="Compare classical ML models on CNN features")
-    p_comp.add_argument("--model", default="resnet10",
-                        choices=["baseline", "advanced", "resnet10", "orion"])
+    p_comp.add_argument("--model", default="resnet50",
+                        choices=["baseline", "advanced", "resnet10", "resnet50", "orion"])
     p_comp.add_argument("--split", default="test",
                         choices=["val", "test", "ood"])
     p_comp.add_argument("--checkpoint", default=None,

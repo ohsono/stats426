@@ -4,7 +4,7 @@ Phase 2 tests – Model Architectures.
 Tests cover:
   • BaselineCNN forward pass & output shape
   • AdvancedCNN + STN forward pass & output shape
-  • ResNet10 modified stem, forward pass, & output shape
+  • ResNet50 modified stem, forward pass, & output shape
   • OrionVLM stub + LoRA forward pass & output shape
   • Gradient flow through each model
   • Parameter counts are reasonable
@@ -25,7 +25,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from utils.config import IMAGE_SIZE, NUM_CLASSES
 from models.baseline import BaselineCNN
 from models.advanced import AdvancedCNN, SpatialTransformerNetwork
-from models.resnet import ResNet10, BasicBlock
+from models.resnet import ResNet50, Bottleneck
 from models.orion_vlm import OrionVLMStub, LoRALinear
 
 
@@ -103,24 +103,24 @@ class TestAdvancedCNN:
 
 
 # ===================================================================
-# 3. ResNet10
+# 3. ResNet50
 # ===================================================================
 
-class TestResNet10:
+class TestResNet50:
     def test_output_shape(self, dummy_batch):
-        model = ResNet10()
+        model = ResNet50()
         out = model(dummy_batch)
         assert out.shape == (BATCH, NUM_CLASSES)
 
     def test_modified_stem_kernel(self):
         """Verify the stem uses 3×3 conv, NOT 7×7."""
-        model = ResNet10()
+        model = ResNet50()
         stem_conv = model.stem[0]  # First module in stem Sequential
         assert stem_conv.kernel_size == (3, 3)
         assert stem_conv.stride == (1, 1)
 
     def test_gradients_flow(self, dummy_batch):
-        model = ResNet10()
+        model = ResNet50()
         out = model(dummy_batch)
         loss = out.sum()
         loss.backward()
@@ -128,18 +128,18 @@ class TestResNet10:
             assert p.grad is not None, f"No grad for {name}"
 
     def test_layer_count(self):
-        """ResNet10 = [1,1,1,1] blocks."""
-        model = ResNet10()
-        assert len(model.layer1) == 1
-        assert len(model.layer2) == 1
-        assert len(model.layer3) == 1
-        assert len(model.layer4) == 1
+        """ResNet50 = [3,4,6,3] Bottleneck blocks."""
+        model = ResNet50()
+        assert len(model.layer1) == 3
+        assert len(model.layer2) == 4
+        assert len(model.layer3) == 6
+        assert len(model.layer4) == 3
 
     def test_parameter_count_reasonable(self):
-        model = ResNet10()
+        model = ResNet50()
         total = sum(p.numel() for p in model.parameters())
-        # ResNet10 should be < 10M params (edge-deployable)
-        assert total < 10_000_000
+        # ResNet50 has ~23M params
+        assert total < 30_000_000
 
 
 # ===================================================================
