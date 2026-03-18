@@ -49,3 +49,16 @@ __pycache__/
 project/dataset/
 project/checkpoints/
 project/logs/
+
+# Images and labels
+*.png,
+*.jpg,
+*.json
+!accuracy.png
+!auc_roc_bar.png
+!confusion_matrix.png
+!domain_gap.png
+!ECE_plot.png
+!misclassifications.png
+!output.png
+!roc_auc_plot.png
